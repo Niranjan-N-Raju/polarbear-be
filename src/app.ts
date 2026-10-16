@@ -7,6 +7,28 @@ export const app = express();
 
 app.disable("x-powered-by");
 app.use(express.json({ limit: "1mb" }));
+app.use((request, response, next) => {
+  const origin = request.header("origin");
+  const allowedOrigins = (
+    process.env.WEB_ORIGINS ?? "http://localhost:5173,http://127.0.0.1:5173"
+  )
+    .split(",")
+    .map((value) => value.trim());
+
+  if (origin && allowedOrigins.includes(origin)) {
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    response.setHeader("Vary", "Origin");
+    response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  }
+
+  if (request.method === "OPTIONS") {
+    response.sendStatus(204);
+    return;
+  }
+
+  next();
+});
 app.use("/api/auth", authRouter);
 app.use("/api", healthRouter);
 
