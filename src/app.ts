@@ -1,7 +1,11 @@
 import express from "express";
 import type { ErrorRequestHandler } from "express";
 import { authRouter } from "./routes/auth.js";
+import { adminDashboardRouter } from "./routes/admin-dashboard.js";
+import { adminStoresRouter } from "./routes/admin-stores.js";
+import { adminUsersRouter } from "./routes/admin-users.js";
 import { healthRouter } from "./routes/health.js";
+import { profileRouter } from "./routes/profile.js";
 
 export const app = express();
 
@@ -31,6 +35,12 @@ app.use((request, response, next) => {
   next();
 });
 app.use("/api/auth", authRouter);
+app.use("/api", adminDashboardRouter);
+app.use("/api", adminStoresRouter);
+app.use("/api", adminUsersRouter);
+app.use("/api", adminUsersRouter);
+app.use("/api/me", profileRouter);
+app.use("/api/me", profileRouter);
 app.use("/api", healthRouter);
 
 app.use((_request, response) => {

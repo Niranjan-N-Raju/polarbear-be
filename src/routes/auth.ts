@@ -2,7 +2,8 @@ import { Router } from "express";
 import type { Request, Response } from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import { SignJWT } from "jose";
+import { requireAuth } from "../middleware/auth.js";
+import { signSessionToken } from "../utils/token.js";
 
 interface LoginUser {
   _id: mongoose.Types.ObjectId;
@@ -41,19 +42,6 @@ function checkRateLimit(key: string): { allowed: boolean; retryAfter: number } {
   }
   entry.count += 1;
   return { allowed: true, retryAfter: 0 };
-}
-
-async function signToken(user: LoginUser, secret: string): Promise<string> {
-  return new SignJWT({
-    id: user._id.toString(),
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    sessionVersion: user.sessionVersion ?? 0,
-  })
-    .setProtectedHeader({ alg: "HS256" })
-    .setExpirationTime("8h")
-    .sign(new TextEncoder().encode(secret));
 }
 
 export const authRouter = Router();
@@ -117,9 +105,13 @@ authRouter.post("/login", async (request: Request, response: Response) => {
 
     rateLimits.delete(`login:${ip}`);
     rateLimits.delete(`login-account:${normalizedEmail}`);
-    const secret = process.env.JWT_SECRET;
-    if (!secret) throw new Error("JWT_SECRET is required.");
-    const token = await signToken(user, secret);
+    const token = await signSessionToken({
+      id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      sessionVersion: user.sessionVersion,
+    });
     response.status(200).json({
       message: "Login successful.",
       token,
@@ -134,4 +126,28 @@ authRouter.post("/login", async (request: Request, response: Response) => {
     console.error("[auth.login] Authentication request failed.");
     response.status(500).json({ message: "An internal server error occurred." });
   }
+});
+
+authRouter.post('/extend', requireAuth, async (request, response) => {
+  const user = request.auth!;
+  const updated = await mongoose.connection.collection('users').findOne({
+    _id: new mongoose.Types.ObjectId(user.id),
+    isActive: { $ne: false },
+  });
+  if (!updated || updated.role !== user.role) {
+    response.status(401).json({ message: 'Session expired.' });
+    return;
+  }
+  const token = await signSessionToken({
+    id: user.id,
+    name: String(updated.name ?? user.name ?? ''),
+    email: String(updated.email ?? user.email ?? ''),
+    role: String(updated.role),
+    sessionVersion: typeof updated.sessionVersion === 'number' ? updated.sessionVersion : 0,
+  });
+  response.json({ message: 'Session extended.', token });
+});
+
+authRouter.post('/logout', requireAuth, (_request, response) => {
+  response.json({ message: 'Logged out.' });
 });
