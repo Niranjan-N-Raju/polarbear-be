@@ -1,0 +1,27 @@
+{
+  "name": "polar-bear-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Express API for Polar Bear web and mobile applications",
+  "type": "module",
+  "engines": {
+    "node": ">=20.17.0"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "express": "^5.1.0",
+    "mongoose": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.0.0"
+  }
+}
