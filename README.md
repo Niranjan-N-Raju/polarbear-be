@@ -9,7 +9,7 @@ Use Node.js 20.17 or newer. Set these variables in a local `.env` file or in the
 - `MONGODB_URI`: MongoDB connection URI, including credentials when required.
 - `MONGODB_DB`: Database name. To use the existing application database, supply the same value as the current backend.
 - `JWT_SECRET`: long random secret used to sign login tokens. Keep it private and use the same value in any service that verifies these tokens.
-- `WEB_ORIGINS`: comma-separated browser origins allowed to call the API. Defaults to the local Vite origins on port `5173`.
+- `WEB_ORIGINS`: comma-separated browser origins allowed to call the API. Defaults to local Vite origins on ports `3000`-`3002` and `5173`.
 - `PORT`: HTTP port, default `4000`.
 
 `.env.example` contains local development placeholders, not a production connection. `.env` files are ignored. Never put MongoDB credentials in the mobile app or commit them.
