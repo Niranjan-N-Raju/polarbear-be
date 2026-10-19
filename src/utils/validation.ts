@@ -33,6 +33,10 @@ export const storeBodySchema = z.object({
   ownerEmail: z.preprocess((value) => value === '' ? undefined : value, emailSchema.optional()),
 });
 
+export const storeArchiveSchema = z.object({
+  archived: z.boolean(),
+});
+
 export const createUserSchema = z.object({
   name: nameSchema,
   email: emailSchema.optional(),

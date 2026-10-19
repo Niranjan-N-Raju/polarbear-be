@@ -5,7 +5,7 @@ import { Franchise } from '../models/Franchise.js';
 import { User } from '../models/User.js';
 import { auditLog } from '../utils/audit.js';
 import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
-import { firstValidationMessage, storeBodySchema } from '../utils/validation.js';
+import { firstValidationMessage, storeArchiveSchema, storeBodySchema } from '../utils/validation.js';
 
 export const adminStoresRouter = Router();
 adminStoresRouter.use(requireAuth, requireRole('admin'));
@@ -133,32 +133,42 @@ adminStoresRouter.patch('/stores', async (request, response) => {
   }
 });
 
-adminStoresRouter.delete('/stores', async (request, response) => {
+adminStoresRouter.patch('/stores/archive', async (request, response) => {
   const auth = request.auth!;
   const id = typeof request.query.id === 'string' ? request.query.id : '';
   if (!mongoose.isValidObjectId(id)) {
     response.status(400).json({ message: 'A valid store id is required.' });
     return;
   }
-  const deleted = await Franchise.findOneAndDelete({
-    _id: id,
-    createdBy: creatorId(auth.id),
-  }).lean();
-  if (!deleted) {
+  const parsed = storeArchiveSchema.safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ message: firstValidationMessage(parsed.error) });
+    return;
+  }
+
+  const archivedAt = parsed.data.archived ? new Date() : undefined;
+  const update = parsed.data.archived
+    ? { $set: { isActive: false, archivedAt } }
+    : { $set: { isActive: true }, $unset: { archivedAt: 1 } };
+  const franchise = await Franchise.findOneAndUpdate(
+    { _id: id, createdBy: creatorId(auth.id) },
+    update,
+    { new: true, runValidators: true },
+  ).lean();
+  if (!franchise) {
     const exists = await Franchise.exists({ _id: id });
     response.status(exists ? 403 : 404).json({
-      message: exists ? 'You can only delete stores you created.' : 'Store not found.',
+      message: exists ? 'You can only archive stores you created.' : 'Store not found.',
     });
     return;
   }
 
-  await User.updateMany({ franchises: id }, { $pull: { franchises: id } });
-  auditLog('store.deleted', {
+  auditLog(parsed.data.archived ? 'store.archived' : 'store.restored', {
     actorId: auth.id,
     actorRole: auth.role,
     targetId: id,
     ip: request.ip,
-    metadata: { name: deleted.name, storeCode: deleted.storeCode },
+    metadata: { name: franchise.name, storeCode: franchise.storeCode },
   });
-  response.json({ message: 'Store deleted successfully.' });
+  response.json({ message: parsed.data.archived ? 'Store archived successfully.' : 'Store restored successfully.', franchise });
 });
