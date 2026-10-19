@@ -100,9 +100,18 @@ adminStoresRouter.patch('/stores', async (request, response) => {
 
   const body = parsed.data;
   const storeType = body.storeType === 'company' ? 'company' : 'franchise';
+  const { ownerName, ownerPhone, ownerEmail, ...storeFields } = body;
   const update = storeType === 'franchise'
-    ? { $set: { ...body, storeType } }
-    : { $set: { ...body, storeType }, $unset: { ownerName: 1, ownerPhone: 1, ownerEmail: 1 } };
+    ? {
+        $set: {
+          ...storeFields,
+          storeType,
+          ...(ownerName !== undefined ? { ownerName } : {}),
+          ...(ownerPhone !== undefined ? { ownerPhone } : {}),
+          ...(ownerEmail !== undefined ? { ownerEmail } : {}),
+        },
+      }
+    : { $set: { ...storeFields, storeType }, $unset: { ownerName: 1, ownerPhone: 1, ownerEmail: 1 } };
   try {
     const franchise = await Franchise.findOneAndUpdate(
       { _id: id, createdBy: creatorId(auth.id) },
