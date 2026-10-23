@@ -20,6 +20,10 @@ function pageValue(value: unknown, fallback: number): number {
   return Math.max(1, Number.parseInt(String(value ?? fallback), 10) || fallback);
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 async function userListResponse(
   request: Request,
   response: Response,
@@ -41,6 +45,23 @@ async function userListResponse(
         return;
       }
       query.franchises = request.query.franchiseId;
+    }
+    if (typeof request.query.search === 'string' && request.query.search.trim()) {
+      const search = new RegExp(escapeRegex(request.query.search.trim()), 'i');
+      query.$or = [{ name: search }, { email: search }, { phone: search }];
+    }
+    if (request.query.status === 'active') query.isActive = { $ne: false };
+    else if (request.query.status === 'inactive') query.isActive = false;
+    else if (request.query.status !== undefined && request.query.status !== 'all') {
+      response.status(400).json({ message: 'Invalid user status.' });
+      return;
+    }
+    if (typeof request.query.role === 'string' && request.query.role && request.query.role !== 'all') {
+      if (!['admin', 'sub_admin', 'franchise_admin', 'employee'].includes(request.query.role)) {
+        response.status(400).json({ message: 'Invalid user type.' });
+        return;
+      }
+      query.role = request.query.role;
     }
   } else {
     query._id = singleId;
@@ -66,7 +87,7 @@ async function userListResponse(
   }
 
   const page = pageValue(request.query.page, 1);
-  const limit = Math.min(500, pageValue(request.query.limit, 50));
+  const limit = Math.min(500, pageValue(request.query.limit, 10));
   const [users, total] = await Promise.all([
     User.find(query).select('-password').sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
     User.countDocuments(query),

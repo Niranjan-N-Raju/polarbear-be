@@ -18,12 +18,42 @@ function creatorId(id: string): mongoose.Types.ObjectId | string {
   return mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : id;
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 adminStoresRouter.get('/stores', async (request, response) => {
   const page = Math.max(1, Number.parseInt(String(request.query.page ?? '1'), 10) || 1);
-  const limit = Math.min(100, Math.max(1, Number.parseInt(String(request.query.limit ?? '50'), 10) || 50));
+  const limit = Math.min(100, Math.max(1, Number.parseInt(String(request.query.limit ?? '10'), 10) || 10));
+  const query: Record<string, unknown> = {};
+  if (typeof request.query.search === 'string' && request.query.search.trim()) {
+    const search = new RegExp(escapeRegex(request.query.search.trim()), 'i');
+    query.$or = [{ name: search }, { storeCode: search }];
+  }
+  if (request.query.status === 'active') {
+    query.isActive = { $ne: false };
+    query.archivedAt = { $in: [null] };
+  } else if (request.query.status === 'archived') {
+    const searchConditions = query.$or;
+    delete query.$or;
+    query.$and = [
+      ...(searchConditions ? [{ $or: searchConditions }] : []),
+      { $or: [{ isActive: false }, { archivedAt: { $ne: null } }] },
+    ];
+  } else if (request.query.status !== undefined && request.query.status !== 'all') {
+    response.status(400).json({ message: 'Invalid store status.' });
+    return;
+  }
+  if (typeof request.query.type === 'string' && request.query.type !== 'all') {
+    if (!['company', 'franchise'].includes(request.query.type)) {
+      response.status(400).json({ message: 'Invalid store type.' });
+      return;
+    }
+    query.storeType = request.query.type;
+  }
   const [franchises, total] = await Promise.all([
-    Franchise.find({}).sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
-    Franchise.countDocuments({}),
+    Franchise.find(query).sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Franchise.countDocuments(query),
   ]);
 
   response.json({
