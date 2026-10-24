@@ -19,12 +19,23 @@ Use Node.js 20.17 or newer. Set these variables in a local `.env` file or in the
 ```sh
 npm install
 npm run dev
+npm test
 npm run typecheck
 npm run build
 npm start
 ```
 
-Run commands from this project's root. `npm run dev` reloads TypeScript changes; `npm start` runs the compiled output after a build.
+Run commands from this project's root. `npm test` runs the backend unit tests with Node's built-in test runner; tests do not require a database. `npm run dev` reloads TypeScript changes; `npm start` runs the compiled output after a build.
+
+## Demo data
+
+`npm run seed:demo` previews 18 demo stores and 18 demo users without changing the database. To insert missing demo records into the configured MongoDB database, run:
+
+```sh
+npm run seed:demo -- --apply
+```
+
+The seed requires an existing active admin account and associates the demo records with it. It is safe to rerun for record creation: existing records are not duplicated or overwritten. With `--apply`, store assignments are randomly refreshed for every existing demo user and each new demo user gets one or two distinct stores. Demo stores use `DEMO001`-`DEMO018` codes; demo users use `demo.user01@example.test`-`demo.user18@example.test` addresses. User passwords are random and stored only as hashes; these demo accounts are intended for testing the admin user list, not for login. The script refuses to write to a non-local MongoDB URI unless `--allow-remote` is also passed, and it never runs when `NODE_ENV=production`.
 
 ## API
 

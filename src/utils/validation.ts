@@ -18,8 +18,8 @@ const passwordSchema = z
   .regex(/[0-9]/, 'Password must contain at least one digit.')
   .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character.');
 
-const nameSchema = z.string().min(1, 'Name is required.').max(100, 'Name must be 100 characters or fewer.').transform((value) => value.trim());
-const emailSchema = z.string().min(1, 'Email is required.').max(254, 'Email is too long.').email('Invalid email format.').transform((value) => value.toLowerCase().trim());
+const nameSchema = z.string().trim().min(1, 'Name is required.').max(100, 'Name must be 100 characters or fewer.');
+const emailSchema = z.string().trim().min(1, 'Email is required.').max(254, 'Email is too long.').email('Invalid email format.').transform((value) => value.toLowerCase());
 
 export const storeBodySchema = z.object({
   name: nameSchema.pipe(z.string().max(100, 'Store name must be 100 characters or fewer.')),

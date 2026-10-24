@@ -11,7 +11,9 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "typecheck": "tsc --noEmit"
+    "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "seed:demo": "tsx scripts/seedDemoData.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
