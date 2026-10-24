@@ -8,8 +8,8 @@ import { User } from '../src/models/User.js';
 
 const DEMO_STORE_COUNT = 50;
 const DEMO_USER_COUNT = 50;
-const isApply = true;//process.argv.includes('--apply');
-const allowRemote = true;//process.argv.includes('--allow-remote');
+const isApply = process.argv.includes('--apply');
+const allowRemote = process.argv.includes('--allow-remote');
 
 function isLocalMongoUri(uri: string): boolean {
   try {
@@ -63,7 +63,9 @@ async function seedDemoData(): Promise<void> {
       throw new Error(`Demo email ${foreignUser.email} is not owned by the selected admin. No records were changed.`);
     }
     const existingEmails = new Set(existingDemoUsers.map((user) => user.email));
-    const existingUsersToReassign = existingDemoUsers;
+    const usersNeedingStoreAssignments = existingDemoUsers.filter(
+      (user) => user.franchises.length < 1 || user.franchises.length > 2,
+    );
     const existingStoreCodes = new Set(existingStores.map((store) => store.storeCode));
     const missingStoreCount = storeCodes.filter((code) => !existingStoreCodes.has(code)).length;
     const missingUserCount = DEMO_USER_COUNT - existingEmails.size;
@@ -72,7 +74,7 @@ async function seedDemoData(): Promise<void> {
     console.log('Admin ownership: confirmed.');
     console.log(`Demo stores: ${missingStoreCount} to add, ${DEMO_STORE_COUNT - missingStoreCount} already present.`);
     console.log(`Demo users: ${missingUserCount} to add, ${existingEmails.size} already present.`);
-    console.log(`Existing demo users to randomly reassign: ${existingUsersToReassign.length}.`);
+    console.log(`Existing demo users needing store assignments: ${usersNeedingStoreAssignments.length}.`);
     if (!isApply) {
       console.log('Preview only. Pass --apply to insert missing demo records.');
       return;
@@ -108,7 +110,7 @@ async function seedDemoData(): Promise<void> {
     }
 
     const availableStoreIds = [...storeIds.values()];
-    for (const user of existingUsersToReassign) {
+    for (const user of usersNeedingStoreAssignments) {
       await User.updateOne(
         { _id: user._id },
         { $set: { franchises: chooseStoreIds(availableStoreIds) } },
@@ -136,7 +138,7 @@ async function seedDemoData(): Promise<void> {
       });
     }
 
-    console.log(`Inserted ${missingStoreCount} demo stores and ${missingUserCount} demo users; randomly reassigned stores for ${existingUsersToReassign.length} existing demo users.`);
+    console.log(`Inserted ${missingStoreCount} demo stores and ${missingUserCount} demo users; assigned stores to ${usersNeedingStoreAssignments.length} existing demo users.`);
   } finally {
     await disconnectFromDatabase();
   }
