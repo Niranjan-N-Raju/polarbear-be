@@ -4,6 +4,7 @@ import { authRouter } from "./routes/auth.js";
 import { adminDashboardRouter } from "./routes/admin-dashboard.js";
 import { adminStoresRouter } from "./routes/admin-stores.js";
 import { adminUsersRouter } from "./routes/admin-users.js";
+import { franchiseDashboardRouter } from "./routes/franchise-dashboard.js";
 import { healthRouter } from "./routes/health.js";
 import { profileRouter } from "./routes/profile.js";
 
@@ -35,6 +36,7 @@ app.use((request, response, next) => {
   next();
 });
 app.use("/api/auth", authRouter);
+app.use("/api", franchiseDashboardRouter);
 app.use("/api", adminDashboardRouter);
 app.use("/api", adminStoresRouter);
 app.use("/api", adminUsersRouter);

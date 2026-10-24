@@ -43,8 +43,20 @@ The seed requires an existing active admin account and associates the demo recor
 
 `POST /api/auth/login` accepts `{ "email": "...", "password": "..." }` and returns the authenticated user and an eight-hour bearer token. The React Native app uses this endpoint.
 
-Add API routers under `src/routes` and mount them in `src/app.ts`. Keep authentication, database access, secrets, and privileged business operations on this server. Existing Next.js endpoints have not been migrated.
+### Franchise-admin dashboard
+
+Franchise admins can use these bearer-authenticated endpoints:
+
+- `GET /api/stores`: all stores assigned to or created by the authenticated user, sorted by name. Returns only selection fields, not owner contact information.
+- `GET /api/dashboard?storeId=<id>`: selected-store employee count, current-calendar-month sales, six-month attrition, all-history weekday averages, top eight expense categories, and payment mix for the last six recorded sales months. `storeCount` is the number of accessible stores.
+- `GET /api/sales?storeId=<id>&from=YYYY-MM-DD&to=YYYY-MM-DD`: daily sales totals for the inclusive range, limited to 366 days between endpoints.
+
+Unlike Next.js's active-store cookie, mobile requests explicitly supply `storeId`; both data endpoints recheck current assignment/ownership on every request. A missing/invalid ID returns `400`; an inaccessible or removed store returns `403`, never an all-stores fallback. Store selection is session-local client state, not a database mutation. The client auto-selects a single store and requires selection when multiple stores are available.
+
+Attendance summary remains `0`, matching the not-yet-defined aggregation in Next.js. Sales and employee history use the existing `sales` and `users` collections; no data is seeded or rewritten by this migration. Admin endpoints retain their existing behavior. Other franchise operational screens/APIs are not yet migrated.
+
+Add API routers under `src/routes` and mount them in `src/app.ts`. Keep authentication, database access, secrets, and privileged business operations on this server.
 
 The server binds to `0.0.0.0` for local device access. A physical React Native device must use the development machine's LAN address, not `localhost`. The Android emulator commonly uses `10.0.2.2`. Native transport settings may need development-only HTTP configuration; production must use HTTPS.
 
-No permissive CORS policy or authentication endpoints are included. Configure explicit allowed browser origins and authentication before migrating protected application APIs. MongoDB automatic index creation is disabled to avoid changing an existing database during startup.
+Configure explicit allowed browser origins when using the API from the web. MongoDB automatic index creation is disabled to avoid changing an existing database during startup.
