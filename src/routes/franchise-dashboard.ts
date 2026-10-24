@@ -5,6 +5,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { Franchise } from '../models/Franchise.js';
 import { Sale } from '../models/Sale.js';
 import { User } from '../models/User.js';
+import { firstValidationMessage, saleBodySchema } from '../utils/validation.js';
 import {
   computeExpenseBreakdown,
   computeMonthlyAttrition,
@@ -135,8 +136,112 @@ franchiseDashboardRouter.get('/sales', requireAuth, async (request, response, ne
     franchise: storeObjectId,
     date: { $gte: range.from, $lte: range.to },
   })
-    .select('date totalSale')
-    .sort({ date: 1 })
+    .select('date totalSale swiggy zomato upi upiCharge cash expenses totalExpenses bankingCash')
+    .sort({ date: -1 })
     .lean();
-  response.json({ sales });
+  response.json({ sales: sales.map(withSaleTotals) });
+});
+
+interface SaleTotalsInput {
+  cash?: number;
+  upiCharge?: number;
+  expenses?: { amount: number }[];
+  totalExpenses?: number;
+  bankingCash?: number;
+}
+
+function withSaleTotals<T extends SaleTotalsInput>(sale: T) {
+  const totalExpenses = sale.totalExpenses ?? (sale.expenses ?? []).reduce((sum, expense) => sum + expense.amount, 0);
+  return {
+    ...sale,
+    upiCharge: sale.upiCharge ?? 0,
+    totalExpenses,
+    bankingCash: sale.bankingCash ?? (sale.cash ?? 0) - totalExpenses,
+  };
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 11000;
+}
+
+async function parseSaleRequest(request: Request, response: Response) {
+  const parsed = saleBodySchema.safeParse(request.body);
+  if (!parsed.success) {
+    response.status(400).json({ message: firstValidationMessage(parsed.error) });
+    return null;
+  }
+  const storeObjectId = await authorizeStore(parsed.data.storeId, request.auth?.id ?? '', response);
+  if (!storeObjectId) return null;
+  const { storeId: _storeId, ...sale } = parsed.data;
+  const cash = sale.totalSale - sale.swiggy - sale.zomato - sale.upi;
+  const totalExpenses = sale.expenses.reduce((sum, expense) => sum + expense.amount, 0);
+  return { storeObjectId, values: { ...sale, cash, totalExpenses, bankingCash: cash - totalExpenses } };
+}
+
+franchiseDashboardRouter.post('/sales', requireAuth, async (request, response, next) => {
+  if (request.auth?.role !== 'franchise_admin') {
+    next();
+    return;
+  }
+  const parsed = await parseSaleRequest(request, response);
+  if (!parsed) return;
+  if (await Sale.findOne({ franchise: parsed.storeObjectId, date: parsed.values.date }).select('_id').lean()) {
+    response.status(409).json({ message: 'A sale already exists for this date.' });
+    return;
+  }
+  try {
+    const sale = await Sale.create({
+      ...parsed.values,
+      franchise: parsed.storeObjectId,
+      createdBy: new mongoose.Types.ObjectId(request.auth.id),
+    });
+    response.status(201).json({ sale, message: 'Sale saved successfully.' });
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      response.status(409).json({ message: 'A sale already exists for this date.' });
+      return;
+    }
+    throw error;
+  }
+});
+
+franchiseDashboardRouter.put('/sales/:id', requireAuth, async (request, response, next) => {
+  if (request.auth?.role !== 'franchise_admin') {
+    next();
+    return;
+  }
+  const saleId = request.params.id;
+  if (typeof saleId !== 'string' || !mongoose.isValidObjectId(saleId)) {
+    response.status(400).json({ message: 'A valid sale id is required.' });
+    return;
+  }
+  const parsed = await parseSaleRequest(request, response);
+  if (!parsed) return;
+  const duplicate = await Sale.findOne({
+    franchise: parsed.storeObjectId,
+    date: parsed.values.date,
+    _id: { $ne: new mongoose.Types.ObjectId(saleId) },
+  }).select('_id').lean();
+  if (duplicate) {
+    response.status(409).json({ message: 'A sale already exists for this date.' });
+    return;
+  }
+  try {
+    const sale = await Sale.findOneAndUpdate(
+      { _id: new mongoose.Types.ObjectId(saleId), franchise: parsed.storeObjectId },
+      { $set: parsed.values },
+      { new: true, runValidators: true },
+    ).lean();
+    if (!sale) {
+      response.status(404).json({ message: 'Sale not found.' });
+      return;
+    }
+    response.json({ sale, message: 'Sale updated successfully.' });
+  } catch (error) {
+    if (isDuplicateKeyError(error)) {
+      response.status(409).json({ message: 'A sale already exists for this date.' });
+      return;
+    }
+    throw error;
+  }
 });

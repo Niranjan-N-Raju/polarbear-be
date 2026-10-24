@@ -13,8 +13,12 @@ export interface SaleRecord {
   swiggy: number;
   zomato: number;
   upi: number;
+  upiCharge: number;
   cash: number;
   expenses: SaleExpense[];
+  totalExpenses: number;
+  bankingCash: number;
+  createdBy?: mongoose.Types.ObjectId;
 }
 
 const saleSchema = new Schema<SaleRecord>(
@@ -25,11 +29,15 @@ const saleSchema = new Schema<SaleRecord>(
     swiggy: { type: Number, required: true, min: 0, default: 0 },
     zomato: { type: Number, required: true, min: 0, default: 0 },
     upi: { type: Number, required: true, min: 0, default: 0 },
+    upiCharge: { type: Number, min: 0, default: 0 },
     cash: { type: Number, required: true },
     expenses: {
       type: [{ name: { type: String, required: true, trim: true }, amount: { type: Number, required: true, min: 0 } }],
       default: [],
     },
+    totalExpenses: { type: Number, default: 0 },
+    bankingCash: { type: Number, default: 0 },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true, autoIndex: false },
 );

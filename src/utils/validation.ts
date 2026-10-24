@@ -64,3 +64,30 @@ export { emailSchema, passwordSchema };
 export function firstValidationMessage(error: z.ZodError): string {
   return error.issues[0]?.message ?? 'Invalid input.';
 }
+function localToday(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+const saleAmount = (field: string) =>
+  z.number({ error: `A valid ${field} is required.` }).min(0, `A valid ${field} is required.`);
+
+export const saleBodySchema = z.object({
+  storeId: z.string().max(50),
+  date: z.string()
+    .refine((value) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+      const date = new Date(`${value}T00:00:00Z`);
+      return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+    }, 'A valid date is required.')
+    .refine((value) => value <= localToday(), 'Date cannot be in the future.'),
+  totalSale: saleAmount('total sale'),
+  swiggy: saleAmount('swiggy'),
+  zomato: saleAmount('zomato'),
+  upi: saleAmount('upi'),
+  upiCharge: saleAmount('upi charge'),
+  expenses: z.array(z.object({
+    name: z.string().trim().min(1, 'Expense name is required.').max(100, 'Expense name must be 100 characters or fewer.'),
+    amount: saleAmount('expense amount'),
+  })).max(100, 'A sale can have at most 100 expenses.').default([]),
+});

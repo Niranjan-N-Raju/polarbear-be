@@ -76,6 +76,25 @@ async function request(path: string) {
   return fetch(`${url}${path}`, { headers: { Authorization: `Bearer ${token}` } });
 }
 
+async function send(method: 'POST' | 'PUT', path: string, body: unknown) {
+  return fetch(`${url}${path}`, {
+    method,
+    headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+const validSale = {
+  storeId: String(storeId),
+  date: '2026-01-15',
+  totalSale: 1000,
+  swiggy: 100,
+  zomato: 50,
+  upi: 300,
+  upiCharge: 5,
+  expenses: [{ name: ' Milk ', amount: 120 }, { name: 'Gas', amount: 30 }],
+};
+
 describe('franchise dashboard API', () => {
   it('requires authentication and blocks unsupported roles', async () => {
     assert.equal((await fetch(`${url}/stores`)).status, 401);
@@ -126,7 +145,11 @@ describe('franchise dashboard API', () => {
     assert.equal((await request(`/sales?storeId=${storeId}&from=2020-01-01&to=2026-10-31`)).status, 400);
     const result = await request(`/sales?storeId=${storeId}&from=2026-10-01&to=2026-10-31`);
     assert.equal(result.status, 200);
-    assert.equal((await result.json()).sales[0].totalSale, 1200);
+    const sale = (await result.json()).sales[0];
+    assert.equal(sale.totalSale, 1200);
+    assert.equal(sale.upiCharge, 0);
+    assert.equal(sale.totalExpenses, 0);
+    assert.equal(sale.bankingCash, 600);
     assert.deepEqual(saleQueries, [{ franchise: storeId, date: { $gte: '2026-10-01', $lte: '2026-10-31' } }]);
     mock.method(Franchise, 'find', () => queryResult([]));
     assert.equal((await request(`/dashboard?storeId=${storeId}`)).status, 403);
@@ -149,5 +172,63 @@ describe('franchise dashboard API', () => {
     });
     assert.equal(saleQueries.length, 0);
     assert.equal(storeQueries.length, 0);
+  });
+
+  it('creates a sale with derived cash, expense and banking totals', async () => {
+    let created: Record<string, unknown> | undefined;
+    mock.method(Sale, 'findOne', () => queryResult(null));
+    mock.method(Sale, 'create', async (doc: Record<string, unknown>) => { created = doc; return { _id: 'sale-1', ...doc }; });
+    const result = await send('POST', '/sales', validSale);
+    assert.equal(result.status, 201);
+    assert.equal((await result.json()).message, 'Sale saved successfully.');
+    assert.ok(created);
+    assert.equal(created.cash, 550);
+    assert.equal(created.totalExpenses, 150);
+    assert.equal(created.bankingCash, 400);
+    assert.equal(String(created.franchise), String(storeId));
+    assert.equal(String(created.createdBy), String(userId));
+    assert.deepEqual(created.expenses, [{ name: 'Milk', amount: 120 }, { name: 'Gas', amount: 30 }]);
+  });
+
+  it('rejects invalid, future, duplicate and unauthorized sales', async () => {
+    const create = mock.method(Sale, 'create', async () => ({}));
+    mock.method(Sale, 'findOne', () => queryResult(null));
+    assert.equal((await send('POST', '/sales', { ...validSale, totalSale: -1 })).status, 400);
+    assert.equal((await send('POST', '/sales', { ...validSale, upi: '12' })).status, 400);
+    assert.equal((await send('POST', '/sales', { ...validSale, date: '2026-02-30' })).status, 400);
+    const future = await send('POST', '/sales', { ...validSale, date: '2999-01-01' });
+    assert.equal(future.status, 400);
+    assert.equal((await future.json()).message, 'Date cannot be in the future.');
+    assert.equal((await send('POST', '/sales', { ...validSale, expenses: [{ name: ' ', amount: 1 }] })).status, 400);
+    assert.equal((await send('POST', '/sales', { ...validSale, storeId: String(otherStoreId) })).status, 403);
+    mock.method(Sale, 'findOne', () => queryResult({ _id: 'existing' }));
+    assert.equal((await send('POST', '/sales', validSale)).status, 409);
+    assert.equal(create.mock.callCount(), 0);
+    mock.method(Sale, 'findOne', () => queryResult(null));
+    mock.method(Sale, 'create', async () => { throw Object.assign(new Error('dup'), { code: 11000 }); });
+    assert.equal((await send('POST', '/sales', validSale)).status, 409);
+  });
+
+  it('updates only sales inside the authorized store', async () => {
+    const saleId = new mongoose.Types.ObjectId();
+    let duplicateFilter: Record<string, unknown> | undefined;
+    let updateFilter: Record<string, unknown> | undefined;
+    mock.method(Sale, 'findOne', (filter: Record<string, unknown>) => { duplicateFilter = filter; return queryResult(null); });
+    mock.method(Sale, 'findOneAndUpdate', (filter: Record<string, unknown>, update: { $set: Record<string, unknown> }) => {
+      updateFilter = filter;
+      return queryResult({ _id: saleId, ...update.$set });
+    });
+    assert.equal((await send('PUT', '/sales/invalid', validSale)).status, 400);
+    const result = await send('PUT', `/sales/${saleId}`, validSale);
+    assert.equal(result.status, 200);
+    const data = await result.json();
+    assert.equal(data.message, 'Sale updated successfully.');
+    assert.equal(data.sale.bankingCash, 400);
+    assert.deepEqual(duplicateFilter, { franchise: storeId, date: validSale.date, _id: { $ne: saleId } });
+    assert.deepEqual(updateFilter, { _id: saleId, franchise: storeId });
+    mock.method(Sale, 'findOneAndUpdate', () => queryResult(null));
+    const missing = await send('PUT', `/sales/${saleId}`, validSale);
+    assert.equal(missing.status, 404);
+    assert.equal((await missing.json()).message, 'Sale not found.');
   });
 });
