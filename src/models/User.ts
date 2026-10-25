@@ -1,4 +1,22 @@
 import mongoose, { Schema } from 'mongoose';
+import { ENCRYPTED_USER_FIELDS, encryptField } from '../utils/crypto.js';
+
+export interface UserDocumentFile {
+  fileId: mongoose.Types.ObjectId;
+  fileName: string;
+  contentType: string;
+  size: number;
+}
+
+const documentFileSchema = new Schema<UserDocumentFile>(
+  {
+    fileId: { type: Schema.Types.ObjectId, required: true },
+    fileName: { type: String, required: true },
+    contentType: { type: String, required: true },
+    size: { type: Number, required: true },
+  },
+  { _id: false },
+);
 
 export type UserRole = 'admin' | 'sub_admin' | 'franchise_admin' | 'employee';
 
@@ -28,6 +46,8 @@ export interface UserRecord {
   bankName?: string;
   bankIfsc?: string;
   bankBranch?: string;
+  aadharDocument?: UserDocumentFile;
+  panDocument?: UserDocumentFile;
   dateOfJoining?: Date;
   createdAt?: Date;
 }
@@ -62,6 +82,8 @@ const userSchema = new Schema<UserRecord>(
     bankName: { type: String, trim: true },
     bankIfsc: { type: String, trim: true },
     bankBranch: { type: String, trim: true },
+    aadharDocument: { type: documentFileSchema },
+    panDocument: { type: documentFileSchema },
     dateOfJoining: { type: Date },
   },
   { timestamps: true, autoIndex: false },
@@ -71,6 +93,16 @@ userSchema.index({ franchises: 1 });
 userSchema.index({ createdBy: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ createdBy: 1, role: 1 });
+
+userSchema.pre('save', function encryptSensitiveFields() {
+  const doc = this as unknown as Record<string, unknown> & { isModified(path: string): boolean };
+  for (const field of ENCRYPTED_USER_FIELDS) {
+    const value = doc[field];
+    if (doc.isModified(field) && typeof value === 'string' && value) {
+      doc[field] = encryptField(value);
+    }
+  }
+});
 
 export const User =
   (mongoose.models.User as mongoose.Model<UserRecord> | undefined) ??

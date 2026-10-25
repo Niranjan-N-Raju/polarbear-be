@@ -6,13 +6,19 @@ import { adminStoresRouter } from "./routes/admin-stores.js";
 import { adminUsersRouter } from "./routes/admin-users.js";
 import { franchiseDashboardRouter } from "./routes/franchise-dashboard.js";
 import { franchiseInventoryRouter } from "./routes/franchise-inventory.js";
+import { franchiseWithdrawalsRouter } from "./routes/franchise-withdrawals.js";
+import { franchisePnlRouter } from "./routes/franchise-pnl.js";
+import { franchiseStoreConfigRouter } from "./routes/franchise-store-config.js";
+import { franchiseEmployeesRouter } from "./routes/franchise-employees.js";
+import { franchiseAttendanceRouter } from "./routes/franchise-attendance.js";
+import { franchiseSalaryRouter } from "./routes/franchise-salary.js";
 import { healthRouter } from "./routes/health.js";
 import { profileRouter } from "./routes/profile.js";
 
 export const app = express();
 
 app.disable("x-powered-by");
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({ limit: "8mb" }));
 app.use((request, response, next) => {
   const origin = request.header("origin");
   const allowedOrigins = (
@@ -39,6 +45,12 @@ app.use((request, response, next) => {
 app.use("/api/auth", authRouter);
 app.use("/api", franchiseDashboardRouter);
 app.use("/api", franchiseInventoryRouter);
+app.use("/api", franchiseWithdrawalsRouter);
+app.use("/api", franchisePnlRouter);
+app.use("/api", franchiseStoreConfigRouter);
+app.use("/api", franchiseEmployeesRouter);
+app.use("/api", franchiseAttendanceRouter);
+app.use("/api", franchiseSalaryRouter);
 app.use("/api", adminDashboardRouter);
 app.use("/api", adminStoresRouter);
 app.use("/api", adminUsersRouter);

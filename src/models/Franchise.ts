@@ -1,4 +1,5 @@
 import mongoose, { Schema } from 'mongoose';
+import { DEFAULT_POSITION_OPTIONS } from '../utils/employeePositions.js';
 
 export type StoreType = 'company' | 'franchise';
 
@@ -7,6 +8,11 @@ export interface StoreShift {
   name: string;
   startTime: string;
   endTime: string;
+}
+
+export interface FranchiseLogo {
+  fileId: mongoose.Types.ObjectId;
+  contentType: string;
 }
 
 export interface FranchiseRecord {
@@ -20,6 +26,7 @@ export interface FranchiseRecord {
   ownerName?: string;
   ownerPhone?: string;
   ownerEmail?: string;
+  logo?: FranchiseLogo;
   shifts: StoreShift[];
   positions: string[];
   salaryCycleType?: 'calendar_month' | 'custom';
@@ -54,8 +61,18 @@ const franchiseSchema = new Schema<FranchiseRecord>(
     ownerName: { type: String, trim: true },
     ownerPhone: { type: String, trim: true },
     ownerEmail: { type: String, lowercase: true, trim: true },
+    logo: {
+      type: new Schema<FranchiseLogo>(
+        {
+          fileId: { type: Schema.Types.ObjectId, required: true },
+          contentType: { type: String, required: true },
+        },
+        { _id: false },
+      ),
+      required: false,
+    },
     shifts: { type: [shiftSchema], default: [] },
-    positions: { type: [String], default: ['SM', 'ASM', 'TTL', 'Sr GSA', 'GSA'] },
+    positions: { type: [String], default: () => [...DEFAULT_POSITION_OPTIONS] },
     salaryCycleType: { type: String, enum: ['calendar_month', 'custom'] },
     salaryCycleStartDay: { type: Number, min: 1, max: 31 },
     salaryCycleEndDay: { type: Number, min: 1, max: 31 },

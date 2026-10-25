@@ -1,0 +1,1 @@
+export const DEFAULT_POSITION_OPTIONS = ["SM", "ASM", "TTL", "Sr GSA", "GSA"];
