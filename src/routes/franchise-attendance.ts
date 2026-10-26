@@ -10,6 +10,9 @@ import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { isDateValue } from '../utils/storeAccess.js';
 import { auditMutation } from '../utils/businessLimits.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
+
+const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.expensiveRead, byUser);
 
 export const franchiseAttendanceRouter = Router();
 const router = franchiseAttendanceRouter;
@@ -66,7 +69,7 @@ function serializeRoster(roster: { weekStart: string; entries: Array<{ employee:
   };
 }
 
-router.get('/attendance', requireAuth, async (request, response, next) => {
+router.get('/attendance', requireAuth, expensiveReadLimiter, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await requireStore(request, response);
   if (!storeId) return;

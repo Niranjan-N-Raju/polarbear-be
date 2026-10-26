@@ -15,6 +15,9 @@ import { bodyRecord, isFranchiseAdmin, isPeriodValue, requireStore, stringQuery 
 import { auditMutation, isMoneyAmount } from '../utils/businessLimits.js';
 import { PNL_COST_OF_GOODS_KEYS, PNL_EXPENSE_KEYS, PNL_RENT_KEYS, PNL_STAFF_SALARY_KEY } from '../utils/pnlExpenses.js';
 import { getCycleRange, resolveCycleSettings, roundCurrency } from '../utils/salaryCycle.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
+
+const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.expensiveRead, byUser);
 
 export const franchisePnlRouter = Router();
 const router = franchisePnlRouter;
@@ -53,7 +56,7 @@ function finiteNonNegative(value: unknown): value is number {
 
 const ALLOWED_INPUT_KEYS = new Set<string>(['netSales', 'nob', ...PNL_EXPENSE_KEYS]);
 
-router.get('/pnl', requireAuth, async (request, response, next) => {
+router.get('/pnl', requireAuth, expensiveReadLimiter, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await requireStore(request, response);
   if (!storeId) return;

@@ -2,6 +2,7 @@ import { app } from "./app.js";
 import { loadConfig } from "./config/env.js";
 import { connectToDatabase, disconnectFromDatabase } from "./config/database.js";
 import { configureTrustProxy } from "./middleware/securityHeaders.js";
+import { configureServerTimeouts } from "./config/httpServer.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -12,6 +13,7 @@ async function main(): Promise<void> {
   const server = app.listen(config.port, "0.0.0.0", () => {
     console.log(`API listening on http://localhost:${config.port}`);
   });
+  configureServerTimeouts(server);
 
   server.on("error", () => {
     console.error("API failed to listen. Check whether PORT is already in use.");

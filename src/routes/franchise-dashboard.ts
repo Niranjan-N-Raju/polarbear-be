@@ -14,6 +14,9 @@ import {
   computePaymentMixTrend,
   computeWeekdayPerformance,
 } from '../utils/dashboardInsights.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
+
+const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.expensiveRead, byUser);
 
 export const franchiseDashboardRouter = Router();
 
@@ -46,7 +49,7 @@ franchiseDashboardRouter.get('/stores', requireAuth, async (request, response, n
   response.json({ franchises });
 });
 
-franchiseDashboardRouter.get('/dashboard', requireAuth, async (request, response, next) => {
+franchiseDashboardRouter.get('/dashboard', requireAuth, expensiveReadLimiter, async (request, response, next) => {
   if (request.auth?.role !== 'franchise_admin') {
     next();
     return;
@@ -89,7 +92,7 @@ franchiseDashboardRouter.get('/dashboard', requireAuth, async (request, response
   });
 });
 
-franchiseDashboardRouter.get('/sales', requireAuth, async (request, response, next) => {
+franchiseDashboardRouter.get('/sales', requireAuth, expensiveReadLimiter, async (request, response, next) => {
   if (request.auth?.role !== 'franchise_admin') {
     next();
     return;

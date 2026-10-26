@@ -4,7 +4,11 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { DumpedInventory, InventoryItem, Product } from '../models/Inventory.js';
 import { authorizeStore, isDateValue } from '../utils/storeAccess.js';
 import { auditMutation, MAX_STOCK_QUANTITY } from '../utils/businessLimits.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
 
+const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.expensiveRead, byUser);
+
+export const MAX_PRODUCTS_PER_REQUEST = 100;
 export const franchiseInventoryRouter = Router();
 const router = franchiseInventoryRouter;
 
@@ -87,6 +91,10 @@ router.post('/products', requireAuth, requireRole('admin'), async (request, resp
   const normalizedNames = names.map(normalizeProductName);
   if (names.length === 0) {
     response.status(400).json({ message: 'Enter at least one product name.' });
+    return;
+  }
+  if (names.length > MAX_PRODUCTS_PER_REQUEST) {
+    response.status(400).json({ message: `Add at most ${MAX_PRODUCTS_PER_REQUEST} products at a time.` });
     return;
   }
   if (names.some((value) => value.length > 100)) {
@@ -173,7 +181,7 @@ router.delete('/products', requireAuth, requireRole('admin'), async (request, re
   response.json({ message: 'Product deleted.' });
 });
 
-router.get('/inventory', requireAuth, async (request, response, next) => {
+router.get('/inventory', requireAuth, expensiveReadLimiter, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const store = await requireStore(request, response);
   if (!store) return;

@@ -5,6 +5,9 @@ import { Withdrawal, type WithdrawalRecord } from '../models/Withdrawal.js';
 import { auditMutation, isMoneyAmount, localToday } from '../utils/businessLimits.js';
 import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { isDateValue } from '../utils/storeAccess.js';
+import { exceedsMaxRange } from '../utils/dateUtils.js';
+
+export const MAX_WITHDRAWAL_RESULTS = 1000;
 
 export const franchiseWithdrawalsRouter = Router();
 const router = franchiseWithdrawalsRouter;
@@ -37,9 +40,18 @@ router.get('/withdrawals', requireAuth, async (request, response, next) => {
   const from = stringQuery(request, 'from');
   const to = stringQuery(request, 'to');
   const hasRange = isDateValue(from) && isDateValue(to);
+  if ((from !== undefined || to !== undefined) && !hasRange) {
+    response.status(400).json({ message: 'from and to must both be valid YYYY-MM-DD dates.' });
+    return;
+  }
+  if (hasRange && (from > to || exceedsMaxRange(from, to))) {
+    response.status(400).json({ message: 'Date range must be ordered and span at most 366 days.' });
+    return;
+  }
   const [withdrawals, totals] = await Promise.all([
     Withdrawal.find({ franchise: storeId, ...(hasRange ? { date: { $gte: from, $lte: to } } : {}) })
       .sort({ date: -1, createdAt: -1 })
+      .limit(MAX_WITHDRAWAL_RESULTS)
       .lean(),
     Withdrawal.aggregate<{ _id: string; total: number }>([
       { $match: { franchise: storeId, type: { $in: ['withdrawal', 'repayment'] } } },

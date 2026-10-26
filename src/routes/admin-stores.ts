@@ -5,6 +5,7 @@ import { Franchise } from '../models/Franchise.js';
 import { auditLog } from '../utils/audit.js';
 import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
 import { firstValidationMessage, storeArchiveSchema, storeBodySchema } from '../utils/validation.js';
+import { clampPage, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
 
 export const adminStoresRouter = Router();
 adminStoresRouter.use('/stores', requireAuth, requireRole('admin'));
@@ -22,8 +23,12 @@ function escapeRegex(value: string): string {
 }
 
 adminStoresRouter.get('/stores', async (request, response) => {
-  const page = Math.max(1, Number.parseInt(String(request.query.page ?? '1'), 10) || 1);
+  const page = clampPage(Math.max(1, Number.parseInt(String(request.query.page ?? '1'), 10) || 1));
   const limit = Math.min(100, Math.max(1, Number.parseInt(String(request.query.limit ?? '10'), 10) || 10));
+  if (isSearchTooLong(request.query.search)) {
+    response.status(400).json({ message: SEARCH_TOO_LONG_MESSAGE });
+    return;
+  }
   const query: Record<string, unknown> = {};
   if (typeof request.query.search === 'string' && request.query.search.trim()) {
     const search = new RegExp(escapeRegex(request.query.search.trim()), 'i');

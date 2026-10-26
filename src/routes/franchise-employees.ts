@@ -10,6 +10,10 @@ import { isDateValue } from '../utils/storeAccess.js';
 import { decryptBuffer, decryptUserFields, encryptBuffer } from '../utils/crypto.js';
 import { decodeBase64Upload, detectAllowedUploadType, getBucket } from '../utils/fileUpload.js';
 import { DEFAULT_POSITION_OPTIONS } from '../utils/employeePositions.js';
+import { clampPage, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
+
+const uploadLimiter = rateLimitMiddleware('upload', rateLimits.upload, byUser);
 
 export const franchiseEmployeesRouter = Router();
 const router = franchiseEmployeesRouter;
@@ -122,11 +126,12 @@ router.get('/users', requireAuth, async (request, response, next) => {
   if (status === 'inactive') query.isActive = false;
   else if (status === 'all' && stringQuery(request, 'includeArchived') !== 'true') query.isActive = { $ne: false };
   const search = stringQuery(request, 'search')?.trim();
+  if (isSearchTooLong(search)) { response.status(400).json({ message: SEARCH_TOO_LONG_MESSAGE }); return; }
   if (search) {
     const regex = new RegExp(escapeRegex(search), 'i');
     query.$or = [{ name: regex }, { phone: regex }];
   }
-  const page = pageValue(request.query.page, 1);
+  const page = clampPage(pageValue(request.query.page, 1));
   const limit = Math.min(500, pageValue(request.query.limit, 50));
   const [users, total, stores] = await Promise.all([
     User.find(query).select('-password').sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
@@ -239,7 +244,7 @@ router.delete('/users/:id', requireAuth, async (request, response, next) => {
   response.json({ message: 'Employee archived.' });
 });
 
-router.post('/users/:id/documents/:documentType', requireAuth, async (request, response, next) => {
+router.post('/users/:id/documents/:documentType', requireAuth, uploadLimiter, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const type = getDocumentType(String(request.params.documentType));
   if (!type) { response.status(400).json({ message: 'Invalid document type.' }); return; }
@@ -273,7 +278,7 @@ router.post('/users/:id/documents/:documentType', requireAuth, async (request, r
   response.json({ document: { fileName, contentType, size: bytes.length } });
 });
 
-router.get('/users/:id/documents/:documentType', requireAuth, async (request, response, next) => {
+router.get('/users/:id/documents/:documentType', requireAuth, uploadLimiter, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const type = getDocumentType(String(request.params.documentType));
   if (!type) { response.status(400).json({ message: 'Invalid document type.' }); return; }

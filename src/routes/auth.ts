@@ -4,6 +4,16 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { requireAuth } from "../middleware/auth.js";
 import { SESSION_ABSOLUTE_MAX_SECONDS, signSessionToken } from "../utils/token.js";
+import {
+  byUser,
+  checkRateLimit,
+  peekRateLimit,
+  rateLimitMiddleware,
+  rateLimits,
+  recordRateLimitFailure,
+  resetRateLimit,
+  sendRateLimited,
+} from "../utils/rateLimit.js";
 
 interface LoginUser {
   _id: mongoose.Types.ObjectId;
@@ -16,42 +26,24 @@ interface LoginUser {
   franchises?: unknown[];
 }
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
-}
+const LOGIN_RATE_MESSAGE = "Too many login attempts. Please try again later.";
+let dummyHashPromise: Promise<string> | undefined;
 
-const WINDOW_MS = 15 * 60 * 1000;
-const MAX_ATTEMPTS = 5;
-const rateLimits = new Map<string, RateLimitEntry>();
-
-function checkRateLimit(key: string): { allowed: boolean; retryAfter: number } {
-  const now = Date.now();
-  let entry = rateLimits.get(key);
-  if (!entry || entry.resetAt <= now) {
-    entry = { count: 0, resetAt: now + WINDOW_MS };
-    rateLimits.set(key, entry);
-  }
-  if (rateLimits.size > 1000) {
-    for (const [storedKey, storedEntry] of rateLimits) {
-      if (storedEntry.resetAt <= now) rateLimits.delete(storedKey);
-    }
-  }
-  if (entry.count >= MAX_ATTEMPTS) {
-    return { allowed: false, retryAfter: Math.ceil((entry.resetAt - now) / 1000) };
-  }
-  entry.count += 1;
-  return { allowed: true, retryAfter: 0 };
+// Unknown accounts still pay for a bcrypt compare so response timing does not reveal which emails exist.
+function dummyHash(): Promise<string> {
+  dummyHashPromise ??= bcrypt.hash("polar-bear-dummy-password", 12);
+  return dummyHashPromise;
 }
 
 export const authRouter = Router();
 
 authRouter.post("/login", async (request: Request, response: Response) => {
-  const ip = request.ip || "unknown";
-  const ipLimit = checkRateLimit(`login:${ip}`);
-  if (!ipLimit.allowed) {
-    response.setHeader("Retry-After", String(ipLimit.retryAfter));
-    response.status(429).json({ message: "Too many login attempts. Please try again later." });
+  // request.ip honours only the configured TRUST_PROXY hop count, so X-Forwarded-For cannot be spoofed.
+  const ip = request.ip || request.socket.remoteAddress || "unknown";
+  const ipAttempts = checkRateLimit(`login-ip-attempts:${ip}`, rateLimits.loginIpAttempts);
+  const ipFailures = peekRateLimit(`login-ip-failures:${ip}`);
+  if (!ipAttempts.allowed || !ipFailures.allowed) {
+    sendRateLimited(response, ipAttempts.retryAfterMs ?? ipFailures.retryAfterMs, LOGIN_RATE_MESSAGE);
     return;
   }
 
@@ -74,10 +66,10 @@ authRouter.post("/login", async (request: Request, response: Response) => {
   }
 
   const normalizedEmail = email.toLowerCase().trim();
-  const accountLimit = checkRateLimit(`login-account:${normalizedEmail}`);
+  const accountKey = `login-account-failures:${normalizedEmail}`;
+  const accountLimit = peekRateLimit(accountKey);
   if (!accountLimit.allowed) {
-    response.setHeader("Retry-After", String(accountLimit.retryAfter));
-    response.status(429).json({ message: "Too many login attempts. Please try again later." });
+    sendRateLimited(response, accountLimit.retryAfterMs, LOGIN_RATE_MESSAGE);
     return;
   }
 
@@ -88,7 +80,13 @@ authRouter.post("/login", async (request: Request, response: Response) => {
       isActive: { $ne: false },
     })) as LoginUser | null;
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    const passwordMatches = await bcrypt.compare(
+      password,
+      typeof user?.password === "string" ? user.password : await dummyHash(),
+    );
+    if (!user || typeof user.password !== "string" || !passwordMatches) {
+      recordRateLimitFailure(accountKey, rateLimits.loginAccountFailures);
+      recordRateLimitFailure(`login-ip-failures:${ip}`, rateLimits.loginIpFailures);
       response.status(401).json({ message: "Invalid email or password." });
       return;
     }
@@ -100,8 +98,9 @@ authRouter.post("/login", async (request: Request, response: Response) => {
       }
     }
 
-    rateLimits.delete(`login:${ip}`);
-    rateLimits.delete(`login-account:${normalizedEmail}`);
+    // Only the account failure counter resets; per-IP budgets are never cleared by a success,
+    // so an attacker with one valid account cannot reset their IP throttle.
+    resetRateLimit(accountKey);
     const token = await signSessionToken({
       id: user._id.toString(),
       name: user.name,
@@ -125,7 +124,7 @@ authRouter.post("/login", async (request: Request, response: Response) => {
   }
 });
 
-authRouter.post('/extend', requireAuth, async (request, response) => {
+authRouter.post('/extend', requireAuth, rateLimitMiddleware('session-extend', rateLimits.sessionExtend, byUser), async (request, response) => {
   const user = request.auth!;
   if (Math.floor(Date.now() / 1000) - user.sessionStart >= SESSION_ABSOLUTE_MAX_SECONDS) {
     response.status(401).json({ message: 'Session expired. Please sign in again.' });
@@ -150,7 +149,7 @@ authRouter.post('/extend', requireAuth, async (request, response) => {
   response.json({ message: 'Session extended.', token });
 });
 
-authRouter.post('/logout', requireAuth, async (request, response) => {
+authRouter.post('/logout', requireAuth, rateLimitMiddleware('logout', rateLimits.logout, byUser), async (request, response) => {
   await mongoose.connection.collection('users').updateOne(
     { _id: new mongoose.Types.ObjectId(request.auth!.id) },
     { $inc: { sessionVersion: 1 } },

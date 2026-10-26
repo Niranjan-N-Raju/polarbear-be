@@ -10,6 +10,9 @@ import { decodeBase64Upload, detectAllowedUploadType, getBucket } from '../utils
 import { getCycleRange, isValidPeriod, resolveCycleSettings } from '../utils/salaryCycle.js';
 import { authorizeStore } from '../utils/storeAccess.js';
 import { bodyRecord, isFranchiseAdmin } from '../utils/franchiseRoute.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
+
+const uploadLimiter = rateLimitMiddleware('upload', rateLimits.upload, byUser);
 
 export const franchiseStoreConfigRouter = Router();
 const router = franchiseStoreConfigRouter;
@@ -45,7 +48,7 @@ router.put('/stores/branding', requireAuth, async (request, response, next) => {
   response.json({ message: 'Store name updated.', store: { name: store.name } });
 });
 
-router.get('/stores/logo', requireAuth, async (request, response, next) => {
+router.get('/stores/logo', requireAuth, uploadLimiter, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await getStoreId(request, response);
   if (!storeId) return;
@@ -61,7 +64,7 @@ router.get('/stores/logo', requireAuth, async (request, response, next) => {
   stream.pipe(response);
 });
 
-router.post('/stores/logo', requireAuth, async (request, response, next) => {
+router.post('/stores/logo', requireAuth, uploadLimiter, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const body = bodyRecord(request);
   const storeId = await getStoreId(request, response);

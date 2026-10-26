@@ -13,6 +13,9 @@ import { datesBetween, localDateValue } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, isPeriodValue, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { getCycleRange, resolveCycleSettings, roundCurrency } from '../utils/salaryCycle.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
+
+const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.expensiveRead, byUser);
 
 export const franchiseSalaryRouter = Router();
 const router = franchiseSalaryRouter;
@@ -44,7 +47,7 @@ function serializeEntry(item: any, kind: EntryKind) {
   return { id: id(item._id), employeeId: id(item.employee), type: item.type, ...(kind === 'extraDay' ? { days: number(item.days) } : { amount: number(item.amount) }) };
 }
 
-router.get('/salary', requireAuth, async (request, response, next) => {
+router.get('/salary', requireAuth, expensiveReadLimiter, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const period = stringQuery(request, 'period');
   if (!period || !/^[0-9]{4}-(0[1-9]|1[0-2])$/.test(period)) { response.status(400).json({ message: 'A valid salary period is required.' }); return; }
@@ -177,7 +180,7 @@ for (const kind of ['advance', 'incentive', 'extraDay'] as const) {
   router.delete(`${path}/:id`, requireAuth, (req, res, next) => deleteEntry(kind, req, res, next));
 }
 
-router.get('/salary/slip', requireAuth, async (request, response, next) => {
+router.get('/salary/slip', requireAuth, expensiveReadLimiter, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const employeeId = stringQuery(request, 'employeeId');
   const period = stringQuery(request, 'period');

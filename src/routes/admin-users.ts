@@ -9,6 +9,7 @@ import { User } from '../models/User.js';
 import { auditLog } from '../utils/audit.js';
 import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
 import { createUserSchema, firstValidationMessage, patchUserSchema, passwordSchema } from '../utils/validation.js';
+import { clampPage, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
 
 export const adminUsersRouter = Router();
 adminUsersRouter.use('/users', requireAuth, requireRole('admin'));
@@ -62,6 +63,10 @@ async function userListResponse(
       }
       query.franchises = request.query.franchiseId;
     }
+    if (isSearchTooLong(request.query.search)) {
+      response.status(400).json({ message: SEARCH_TOO_LONG_MESSAGE });
+      return;
+    }
     if (typeof request.query.search === 'string' && request.query.search.trim()) {
       const search = new RegExp(escapeRegex(request.query.search.trim()), 'i');
       query.$or = [{ name: search }, { email: search }, { phone: search }];
@@ -98,7 +103,7 @@ async function userListResponse(
     return;
   }
 
-  const page = pageValue(request.query.page, 1);
+  const page = clampPage(pageValue(request.query.page, 1));
   const limit = Math.min(500, pageValue(request.query.limit, 10));
   const [users, total] = await Promise.all([
     User.find(query).select(ADMIN_USER_PROJECTION).sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
