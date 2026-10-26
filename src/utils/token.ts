@@ -18,6 +18,7 @@ export interface SessionUser {
 export async function signSessionToken(user: SessionUser): Promise<string> {
   const secret = process.env.JWT_SECRET;
   if (!secret) throw new Error('JWT_SECRET is required.');
+  if (secret.length < 32) throw new Error('JWT_SECRET must be at least 32 characters.');
   const now = Math.floor(Date.now() / 1000);
   const sessionStart = user.sessionStart ?? now;
   const absoluteExpiry = sessionStart + SESSION_ABSOLUTE_MAX_SECONDS;

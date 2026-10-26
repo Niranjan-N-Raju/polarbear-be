@@ -15,34 +15,19 @@ import { franchiseSalaryRouter } from "./routes/franchise-salary.js";
 import { healthRouter } from "./routes/health.js";
 import { profileRouter } from "./routes/profile.js";
 import { rejectDangerousKeys } from "./middleware/rejectDangerousKeys.js";
+import { cors, securityHeaders } from "./middleware/securityHeaders.js";
+
+const UPLOAD_PATHS = ["/api/users/:id/documents/:documentType", "/api/stores/logo"];
 
 export const app = express();
 
 app.disable("x-powered-by");
-app.use(express.json({ limit: "8mb" }));
-app.use((request, response, next) => {
-  const origin = request.header("origin");
-  const allowedOrigins = (
-    process.env.WEB_ORIGINS ??
-    "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:3002,http://127.0.0.1:3002,http://localhost:3003,http://127.0.0.1:3003,http://localhost:3004,http://127.0.0.1:3004,http://localhost:3005,http://127.0.0.1:3005,http://localhost:5173,http://127.0.0.1:5173"
-  )
-    .split(",")
-    .map((value) => value.trim());
-
-  if (origin && allowedOrigins.includes(origin)) {
-    response.setHeader("Access-Control-Allow-Origin", origin);
-    response.setHeader("Vary", "Origin");
-    response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-    response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  }
-
-  if (request.method === "OPTIONS") {
-    response.sendStatus(204);
-    return;
-  }
-
-  next();
-});
+app.set("trust proxy", false);
+app.use(securityHeaders);
+app.use(cors);
+// Only base64 upload endpoints (5 MB documents, 2 MB logos) need large bodies; everything else is capped at 1 MB.
+app.use(UPLOAD_PATHS, express.json({ limit: "8mb" }));
+app.use(express.json({ limit: "1mb" }));
 app.use(rejectDangerousKeys);
 app.use("/api/auth", authRouter);
 app.use("/api", franchiseDashboardRouter);
@@ -63,7 +48,19 @@ app.use((_request, response) => {
   response.status(404).json({ message: "Route not found." });
 });
 
-const handleError: ErrorRequestHandler = (_error, _request, response, _next) => {
+const handleError: ErrorRequestHandler = (error, _request, response, _next) => {
+  const parserError = error as { type?: unknown; status?: unknown };
+  if (parserError.type === "entity.too.large") {
+    response.status(413).json({ message: "Request body is too large." });
+    return;
+  }
+  if (parserError.type === "entity.parse.failed" || parserError.type === "encoding.unsupported" || parserError.type === "charset.unsupported") {
+    response.status(400).json({ message: "Invalid request body." });
+    return;
+  }
+  if (process.env.NODE_ENV !== "test") {
+    console.error("Unhandled request error:", error instanceof Error ? error.name : "unknown");
+  }
   response.status(500).json({ message: "Internal server error." });
 };
 

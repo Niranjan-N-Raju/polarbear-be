@@ -30,7 +30,7 @@ export async function requireAuth(
   const token = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
   const secret = process.env.JWT_SECRET;
 
-  if (!token || !secret) {
+  if (!token || !secret || secret.length < 32) {
     response.status(401).json({ message: 'Unauthorized' });
     return;
   }

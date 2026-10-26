@@ -1,9 +1,11 @@
 import { app } from "./app.js";
 import { loadConfig } from "./config/env.js";
 import { connectToDatabase, disconnectFromDatabase } from "./config/database.js";
+import { configureTrustProxy } from "./middleware/securityHeaders.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
+  configureTrustProxy(app);
   await connectToDatabase(config);
   console.log("MongoDB connected.");
 

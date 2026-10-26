@@ -21,8 +21,19 @@ export function loadConfig(): AppConfig {
   if (!jwtSecret) {
     throw new Error("JWT_SECRET is required.");
   }
+  if (jwtSecret.length < 32) {
+    throw new Error("JWT_SECRET must be at least 32 characters.");
+  }
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("PORT must be an integer between 1 and 65535.");
+  }
+  if (process.env.NODE_ENV === "production") {
+    if (!process.env.WEB_ORIGINS?.trim()) {
+      throw new Error("WEB_ORIGINS must list the allowed browser origins in production.");
+    }
+    if (!/^[0-9a-fA-F]{64}$/.test(process.env.FIELD_ENCRYPTION_KEY ?? "")) {
+      throw new Error("FIELD_ENCRYPTION_KEY (64 hex characters) is required in production.");
+    }
   }
 
   return { port, mongoUri, mongoDatabase, jwtSecret };
