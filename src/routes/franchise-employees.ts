@@ -1,12 +1,12 @@
 import { randomBytes } from 'node:crypto';
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { requireAuth } from '../middleware/auth.js';
 import { Franchise } from '../models/Franchise.js';
 import { User, type UserRecord, type UserDocumentFile } from '../models/User.js';
-import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
-import { isDateValue } from '../utils/storeAccess.js';
+import { bodyRecord, isFranchiseAdmin, stringQuery } from '../utils/franchiseRoute.js';
+import { authorizeStore, isDateValue } from '../utils/storeAccess.js';
 import { decryptBuffer, decryptUserFields, encryptBuffer } from '../utils/crypto.js';
 import { decodeBase64Upload, detectAllowedUploadType, getBucket } from '../utils/fileUpload.js';
 import { DEFAULT_POSITION_OPTIONS } from '../utils/employeePositions.js';
@@ -51,20 +51,20 @@ function safeUser<T extends Record<string, unknown>>(user: T): T {
   return decryptUserFields(user);
 }
 
-async function resolveStore(request: Parameters<typeof requireStore>[0], response: Parameters<typeof requireStore>[1]) {
+async function resolveStore(request: Request, response: Response) {
   const body = bodyRecord(request);
   const assigned = Array.isArray(body.franchiseIds) && typeof body.franchiseIds[0] === 'string'
     ? body.franchiseIds[0]
     : undefined;
   const queryStore = stringQuery(request, 'storeId') ?? stringQuery(request, 'franchiseId');
-  const id = queryStore ?? (typeof body.storeId === 'string' ? body.storeId : assigned);
-  if (id) request.query.storeId = id;
-  else {
+  let id: unknown = queryStore ?? (typeof body.storeId === 'string' ? body.storeId : assigned);
+  if (!id) {
     const authUser = await User.findById(request.auth!.id).select('franchises').lean();
     const ownStore = authUser?.franchises?.[0];
-    if (ownStore) request.query.storeId = String(ownStore);
+    if (ownStore) id = String(ownStore);
   }
-  return requireStore(request, response);
+  // Express 5 re-parses req.query on every access, so the id is passed directly rather than written back.
+  return authorizeStore(id, request.auth!.id, response);
 }
 
 async function targetForStore(id: string, storeId: mongoose.Types.ObjectId) {

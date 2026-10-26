@@ -18,6 +18,7 @@ import { Attendance } from '../src/models/Attendance.js';
 import { WeeklyRoster } from '../src/models/WeeklyRoster.js';
 import { queryResult } from './helpers/franchiseApi.js';
 import { SESSION_AUDIENCE, SESSION_ISSUER, signSessionToken } from '../src/utils/token.js';
+import { resetRateLimitsForTests } from '../src/utils/rateLimit.js';
 
 const actorId = new mongoose.Types.ObjectId();
 const storeId = new mongoose.Types.ObjectId();
@@ -90,6 +91,7 @@ after(async () => {
   else process.env.JWT_SECRET = previousSecret;
 });
 beforeEach(() => {
+  resetRateLimitsForTests();
   role = 'franchise_admin';
   active = true;
   sessionVersion = 0;
