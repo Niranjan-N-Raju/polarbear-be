@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { DumpedInventory, InventoryItem, Product } from '../models/Inventory.js';
 import { authorizeStore, isDateValue } from '../utils/storeAccess.js';
+import { auditMutation, MAX_STOCK_QUANTITY } from '../utils/businessLimits.js';
 
 export const franchiseInventoryRouter = Router();
 const router = franchiseInventoryRouter;
@@ -19,10 +20,10 @@ function normalizeProductName(value: string) {
 }
 
 function parsePositiveInteger(value: unknown) {
-  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value <= MAX_STOCK_QUANTITY ? value : null;
   if (typeof value === 'string' && /^\d+$/.test(value)) {
     const parsed = Number(value);
-    return parsed > 0 && Number.isSafeInteger(parsed) ? parsed : null;
+    return parsed > 0 && parsed <= MAX_STOCK_QUANTITY ? parsed : null;
   }
   return null;
 }
@@ -208,6 +209,7 @@ router.post('/inventory', requireAuth, async (request, response, next) => {
     },
     { upsert: true, new: true, lean: true },
   );
+  auditMutation(request, 'inventory.stock.added', { storeId, targetId: item?._id, after: { productId, expiryDate: body.expiryDate, quantityAdded: quantity, quantity: item?.quantity } });
   response.status(201).json({ item: item ? serializeItem(item) : null });
 });
 
@@ -260,6 +262,7 @@ router.patch('/inventory', requireAuth, async (request, response, next) => {
       response.status(400).json({ message: 'Not enough stock available.' });
       return;
     }
+    auditMutation(request, 'inventory.stock.consumed', { storeId, targetId: itemId, before: { quantity: updated.quantity + quantity }, after: { quantity: updated.quantity, quantityConsumed: quantity } });
     response.json({ message: 'Stock consumed successfully.', item: serializeItem(updated) });
     return;
   }
@@ -288,6 +291,7 @@ router.patch('/inventory', requireAuth, async (request, response, next) => {
       quantity: before.quantity,
       dumpedAt: new Date(),
     });
+    auditMutation(request, 'inventory.stock.dumped', { storeId, targetId: itemId, before: { quantity: before.quantity, expiryDate: before.expiryDate }, after: { quantity: 0 } });
     response.json({ message: 'Expired stock dumped successfully.' });
     return;
   }

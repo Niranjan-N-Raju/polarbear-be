@@ -9,6 +9,7 @@ import { datesBetween, exceedsMaxRange, isValidDate, localDateValue, MAX_RANGE_D
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { isDateValue } from '../utils/storeAccess.js';
+import { auditMutation } from '../utils/businessLimits.js';
 
 export const franchiseAttendanceRouter = Router();
 const router = franchiseAttendanceRouter;
@@ -139,6 +140,9 @@ router.put('/attendance', requireAuth, async (request, response, next) => {
     },
   }));
   if (operations.length) await Attendance.bulkWrite(operations);
+  if (savedRecords.length) {
+    auditMutation(request, 'attendance.marked', { storeId, after: { date, records: savedRecords.map((record) => ({ employeeId: record.employeeId, status: record.status })) } });
+  }
   response.json({ message: skippedCount ? `Attendance saved for ${savedRecords.length} employee(s). ${skippedCount} employee(s) weren't active on this date and were skipped.` : 'Attendance saved successfully.', skippedCount });
 });
 
@@ -151,6 +155,7 @@ router.delete('/attendance', requireAuth, async (request, response, next) => {
   if (!isDateValue(date) || !employeeId || !mongoose.isValidObjectId(employeeId)) { response.status(400).json({ message: 'A valid store, date, and employee are required.' }); return; }
   const deleted = await Attendance.findOneAndDelete({ franchise: storeId, employee: employeeId, date }).lean();
   if (!deleted) { response.status(404).json({ message: 'Attendance record not found.' }); return; }
+  auditMutation(request, 'attendance.removed', { storeId, targetId: employeeId, before: { date, status: deleted.status } });
   response.json({ message: 'Attendance record removed.' });
 });
 

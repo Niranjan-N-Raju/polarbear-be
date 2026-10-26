@@ -2,6 +2,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import { requireAuth } from '../middleware/auth.js';
 import { Withdrawal, type WithdrawalRecord } from '../models/Withdrawal.js';
+import { auditMutation, isMoneyAmount, localToday } from '../utils/businessLimits.js';
 import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { isDateValue } from '../utils/storeAccess.js';
 
@@ -12,8 +13,9 @@ type WithdrawalInput = Pick<WithdrawalRecord, 'date' | 'amount' | 'type'> & { re
 
 function validate(body: Record<string, unknown>): { value: WithdrawalInput } | { error: string } {
   if (!isDateValue(body.date)) return { error: 'A valid date is required.' };
+  if (body.date > localToday()) return { error: 'Date cannot be in the future.' };
   const amount = body.amount;
-  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) {
+  if (!isMoneyAmount(amount, { allowZero: false })) {
     return { error: 'A valid amount is required.' };
   }
   if (body.type !== 'withdrawal' && body.type !== 'repayment') {
@@ -62,6 +64,7 @@ router.post('/withdrawals', requireAuth, async (request, response, next) => {
     ...validation.value,
     createdBy: new mongoose.Types.ObjectId(request.auth!.id),
   });
+  auditMutation(request, 'withdrawal.created', { storeId, targetId: created._id, after: validation.value });
   response.status(201).json({ message: 'Entry added successfully.', withdrawal: serialize(created) });
 });
 
@@ -73,13 +76,14 @@ router.put('/withdrawals/:id', requireAuth, async (request, response, next) => {
   if (!storeId) return;
   const validation = validate(bodyRecord(request));
   if ('error' in validation) { response.status(400).json({ message: validation.error }); return; }
-  const updated = await Withdrawal.findOneAndUpdate(
+  const previous = await Withdrawal.findOneAndUpdate(
     { _id: id, franchise: storeId },
     { $set: validation.value },
-    { new: true },
+    { new: false },
   ).lean();
-  if (!updated) { response.status(404).json({ message: 'Entry not found.' }); return; }
-  response.json({ message: 'Entry updated successfully.', withdrawal: serialize(updated) });
+  if (!previous) { response.status(404).json({ message: 'Entry not found.' }); return; }
+  auditMutation(request, 'withdrawal.updated', { storeId, targetId: id, before: serialize(previous), after: validation.value });
+  response.json({ message: 'Entry updated successfully.', withdrawal: serialize({ ...previous, ...validation.value }) });
 });
 
 router.delete('/withdrawals/:id', requireAuth, async (request, response, next) => {
@@ -90,5 +94,6 @@ router.delete('/withdrawals/:id', requireAuth, async (request, response, next) =
   if (!storeId) return;
   const deleted = await Withdrawal.findOneAndDelete({ _id: id, franchise: storeId }).lean();
   if (!deleted) { response.status(404).json({ message: 'Entry not found.' }); return; }
+  auditMutation(request, 'withdrawal.deleted', { storeId, targetId: id, before: serialize(deleted) });
   response.json({ message: 'Entry removed.' });
 });

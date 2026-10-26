@@ -7,6 +7,7 @@ import { Sale } from '../models/Sale.js';
 import { User } from '../models/User.js';
 import { authorizeStore, getVisibleStoreIds, isDateValue } from '../utils/storeAccess.js';
 import { firstValidationMessage, saleBodySchema } from '../utils/validation.js';
+import { auditMutation } from '../utils/businessLimits.js';
 import {
   computeExpenseBreakdown,
   computeMonthlyAttrition,
@@ -130,6 +131,11 @@ function isDuplicateKeyError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 11000;
 }
 
+function saleAuditSnapshot(sale: Record<string, unknown>) {
+  const { date, totalSale, swiggy, zomato, upi, upiCharge, cash, expenses, totalExpenses, bankingCash } = sale;
+  return { date, totalSale, swiggy, zomato, upi, upiCharge, cash, expenses, totalExpenses, bankingCash };
+}
+
 async function parseSaleRequest(request: Request, response: Response) {
   const parsed = saleBodySchema.safeParse(request.body);
   if (!parsed.success) {
@@ -161,6 +167,7 @@ franchiseDashboardRouter.post('/sales', requireAuth, async (request, response, n
       franchise: parsed.storeObjectId,
       createdBy: new mongoose.Types.ObjectId(request.auth.id),
     });
+    auditMutation(request, 'sale.created', { storeId: parsed.storeObjectId, targetId: sale._id, after: parsed.values });
     response.status(201).json({ sale, message: 'Sale saved successfully.' });
   } catch (error) {
     if (isDuplicateKeyError(error)) {
@@ -193,15 +200,22 @@ franchiseDashboardRouter.put('/sales/:id', requireAuth, async (request, response
     return;
   }
   try {
-    const sale = await Sale.findOneAndUpdate(
+    const before = await Sale.findOneAndUpdate(
       { _id: new mongoose.Types.ObjectId(saleId), franchise: parsed.storeObjectId },
       { $set: parsed.values },
-      { new: true, runValidators: true },
+      { new: false, runValidators: true },
     ).lean();
-    if (!sale) {
+    if (!before) {
       response.status(404).json({ message: 'Sale not found.' });
       return;
     }
+    const sale = { ...before, ...parsed.values };
+    auditMutation(request, 'sale.updated', {
+      storeId: parsed.storeObjectId,
+      targetId: before._id,
+      before: saleAuditSnapshot(before),
+      after: parsed.values,
+    });
     response.json({ sale, message: 'Sale updated successfully.' });
   } catch (error) {
     if (isDuplicateKeyError(error)) {

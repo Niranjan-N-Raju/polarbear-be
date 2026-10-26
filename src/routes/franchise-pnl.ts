@@ -12,6 +12,7 @@ import { User } from '../models/User.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { datesBetween, localDateValue } from '../utils/dateUtils.js';
 import { bodyRecord, isFranchiseAdmin, isPeriodValue, requireStore, stringQuery } from '../utils/franchiseRoute.js';
+import { auditMutation, isMoneyAmount } from '../utils/businessLimits.js';
 import { PNL_COST_OF_GOODS_KEYS, PNL_EXPENSE_KEYS, PNL_RENT_KEYS, PNL_STAFF_SALARY_KEY } from '../utils/pnlExpenses.js';
 import { getCycleRange, resolveCycleSettings, roundCurrency } from '../utils/salaryCycle.js';
 
@@ -47,8 +48,10 @@ function toPlainValues(values: unknown): ValueMap {
 }
 
 function finiteNonNegative(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  return isMoneyAmount(value);
 }
+
+const ALLOWED_INPUT_KEYS = new Set<string>(['netSales', 'nob', ...PNL_EXPENSE_KEYS]);
 
 router.get('/pnl', requireAuth, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
@@ -188,7 +191,7 @@ router.put('/pnl/inputs', requireAuth, async (request, response, next) => {
   if (entries.length > MAX_FIELDS) { response.status(400).json({ message: 'Too many fields.' }); return; }
   const values: ValueMap = {};
   for (const [key, value] of entries) {
-    if (!FIELD_KEY_PATTERN.test(key)) { response.status(400).json({ message: `Invalid field name: ${key}.` }); return; }
+    if (!FIELD_KEY_PATTERN.test(key) || !ALLOWED_INPUT_KEYS.has(key)) { response.status(400).json({ message: `Invalid field name: ${key}.` }); return; }
     if (!finiteNonNegative(value)) { response.status(400).json({ message: `Enter a valid value for ${key}.` }); return; }
     values[key] = value;
   }
@@ -201,5 +204,6 @@ router.put('/pnl/inputs', requireAuth, async (request, response, next) => {
     { $set: { values }, $setOnInsert: { createdBy: new mongoose.Types.ObjectId(request.auth!.id) } },
     { new: true, upsert: true, runValidators: true },
   ).lean();
+  auditMutation(request, 'pnl.inputs.saved', { storeId, targetId: storeId, after: { period, values } });
   response.json({ message: 'P&L inputs saved.', input: { period: input!.period, values: toPlainValues(input!.values) } });
 });

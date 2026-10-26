@@ -8,6 +8,7 @@ import { Franchise } from '../models/Franchise.js';
 import { Incentive } from '../models/Incentive.js';
 import { User } from '../models/User.js';
 import { decryptUserFields } from '../utils/crypto.js';
+import { auditMutation, isMoneyAmount, MAX_EXTRA_DAYS } from '../utils/businessLimits.js';
 import { datesBetween, localDateValue } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, isPeriodValue, requireStore, stringQuery } from '../utils/franchiseRoute.js';
@@ -33,7 +34,10 @@ function validateEntry(body: Record<string, unknown>, kind: EntryKind): { error:
   const type = typeof body.type === 'string' ? body.type.trim() : '';
   if (!type || type.length > 100) return { error: `Enter a ${kind === 'advance' ? 'reason for the advance' : kind === 'incentive' ? 'incentive type' : 'reason for the extra days'}.` } as const;
   const value = kind === 'extraDay' ? body.days : body.amount;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return { error: kind === 'extraDay' ? 'Enter a valid number of days.' : 'Enter a valid amount.' } as const;
+  const valid = kind === 'extraDay'
+    ? typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= MAX_EXTRA_DAYS
+    : isMoneyAmount(value);
+  if (!valid) return { error: kind === 'extraDay' ? `Enter a valid number of days (0 to ${MAX_EXTRA_DAYS}).` : 'Enter a valid amount.' } as const;
   return { value: { type, [kind === 'extraDay' ? 'days' : 'amount']: value } };
 }
 function serializeEntry(item: any, kind: EntryKind) {
@@ -95,9 +99,16 @@ router.put('/salary', requireAuth, async (request, response, next) => {
   const storeId = await requireStore(request, response);
   if (!storeId) return;
   const startDay = isCalendarMonth ? 1 : Number(body.startDay);
-  const store = await Franchise.findOneAndUpdate({ _id: storeId }, { $set: { salaryCycleType: body.cycleType, salaryCycleStartDay: startDay, salaryCycleEndDay: isCalendarMonth ? 31 : startDay - 1, salaryCycleConfiguredAt: new Date() } }, { new: true, runValidators: true }).lean();
+  const store = await Franchise.findOneAndUpdate({ _id: storeId }, { $set: { salaryCycleType: body.cycleType, salaryCycleStartDay: startDay, salaryCycleEndDay: isCalendarMonth ? 31 : startDay - 1, salaryCycleConfiguredAt: new Date() } }, { new: false, runValidators: true }).lean();
   if (!store) { response.status(404).json({ message: 'Store not found.' }); return; }
-  response.json({ message: 'Salary cycle updated.', cycle: { startDay: store.salaryCycleStartDay, endDay: store.salaryCycleEndDay } });
+  const endDay = isCalendarMonth ? 31 : startDay - 1;
+  auditMutation(request, 'salary.cycle.updated', {
+    storeId,
+    targetId: storeId,
+    before: { cycleType: store.salaryCycleType, startDay: store.salaryCycleStartDay, endDay: store.salaryCycleEndDay },
+    after: { cycleType: body.cycleType, startDay, endDay },
+  });
+  response.json({ message: 'Salary cycle updated.', cycle: { startDay, endDay } });
 });
 
 async function listEntry(kind: EntryKind, request: import('express').Request, response: import('express').Response, next: import('express').NextFunction) {
@@ -122,6 +133,7 @@ async function createEntry(kind: EntryKind, request: import('express').Request, 
   const employee = await User.findOne({ _id: employeeId, role: 'employee', franchises: storeId }).select('_id').lean();
   if (!employee) { response.status(404).json({ message: 'Employee not found in this store.' }); return; }
   const entry = await collections[kind].create({ franchise: storeId, employee: employeeId, period: body.period, ...validated.value, createdBy: new mongoose.Types.ObjectId(request.auth!.id) });
+  auditMutation(request, `salary.${kind}.created`, { storeId, targetId: entry._id, after: { employeeId, period: body.period, ...validated.value } });
   response.status(201).json({ message: `${labels[kind]} added successfully.`, [kind]: serializeEntry(entry, kind) });
 }
 async function updateEntry(kind: EntryKind, request: import('express').Request, response: import('express').Response, next: import('express').NextFunction) {
@@ -139,8 +151,10 @@ async function updateEntry(kind: EntryKind, request: import('express').Request, 
   const entry = await collections[kind].findOne({ _id: entryId, franchise: storeId });
   if (!entry) { response.status(404).json({ message: kind === "extraDay" ? "Extra days entry not found." : kind === "advance" ? "Advance not found." : "Incentive not found." }); return; }
 
+  const before = serializeEntry(entry, kind);
   Object.assign(entry, updateValue);
   await entry.save();
+  auditMutation(request, `salary.${kind}.updated`, { storeId, targetId: entry._id, before, after: updateValue });
   response.json({ message: kind === "extraDay" ? "Extra days updated." : kind === "advance" ? "Advance updated." : "Incentive updated.", id: id(entry._id), ...updateValue });
 
 }
@@ -152,6 +166,7 @@ async function deleteEntry(kind: EntryKind, request: import('express').Request, 
   if (!storeId) return;
   const deleted = await collections[kind].findOneAndDelete({ _id: entryId, franchise: storeId }).lean();
   if (!deleted) { response.status(404).json({ message: `${labels[kind]} not found.` }); return; }
+  auditMutation(request, `salary.${kind}.deleted`, { storeId, targetId: entryId, before: serializeEntry(deleted, kind) });
   response.json({ message: `${labels[kind]} removed.` });
 }
 for (const kind of ['advance', 'incentive', 'extraDay'] as const) {

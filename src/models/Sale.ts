@@ -30,7 +30,7 @@ const saleSchema = new Schema<SaleRecord>(
     zomato: { type: Number, required: true, min: 0, default: 0 },
     upi: { type: Number, required: true, min: 0, default: 0 },
     upiCharge: { type: Number, min: 0, default: 0 },
-    cash: { type: Number, required: true },
+    cash: { type: Number, required: true, min: 0 },
     expenses: {
       type: [{ name: { type: String, required: true, trim: true }, amount: { type: Number, required: true, min: 0 } }],
       default: [],

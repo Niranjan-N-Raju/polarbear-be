@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_MONEY_AMOUNT } from './businessLimits.js';
 
 const optionalText = (maxLength: number) =>
   z.string().max(maxLength, `Must be ${maxLength} characters or fewer.`).optional().transform((value) => value?.trim());
@@ -70,7 +71,9 @@ function localToday(): string {
 }
 
 const saleAmount = (field: string) =>
-  z.number({ error: `A valid ${field} is required.` }).min(0, `A valid ${field} is required.`);
+  z.number({ error: `A valid ${field} is required.` })
+    .min(0, `A valid ${field} is required.`)
+    .max(MAX_MONEY_AMOUNT, `The ${field} is too large.`);
 
 export const saleBodySchema = z.object({
   storeId: z.string().max(50),
@@ -90,4 +93,10 @@ export const saleBodySchema = z.object({
     name: z.string().trim().min(1, 'Expense name is required.').max(100, 'Expense name must be 100 characters or fewer.'),
     amount: saleAmount('expense amount'),
   })).max(100, 'A sale can have at most 100 expenses.').default([]),
-});
+}).refine(
+  (sale) => sale.swiggy + sale.zomato + sale.upi <= sale.totalSale,
+  { message: 'Swiggy, Zomato and UPI cannot exceed the total sale.', path: ['totalSale'] },
+).refine(
+  (sale) => sale.expenses.reduce((sum, expense) => sum + expense.amount, 0) <= MAX_MONEY_AMOUNT,
+  { message: 'Total expenses are too large.', path: ['expenses'] },
+);
