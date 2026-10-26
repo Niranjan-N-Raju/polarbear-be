@@ -3,7 +3,7 @@ import type { Request, Response } from "express";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { requireAuth } from "../middleware/auth.js";
-import { signSessionToken } from "../utils/token.js";
+import { SESSION_ABSOLUTE_MAX_SECONDS, signSessionToken } from "../utils/token.js";
 
 interface LoginUser {
   _id: mongoose.Types.ObjectId;
@@ -94,10 +94,7 @@ authRouter.post("/login", async (request: Request, response: Response) => {
     }
 
     if (user.role === "franchise_admin" || user.role === "employee") {
-      const createdCount = await mongoose.connection
-        .collection("franchises")
-        .countDocuments({ createdBy: user._id });
-      if ((user.franchises ?? []).length === 0 && createdCount === 0) {
+      if ((user.franchises ?? []).length === 0) {
         response.status(403).json({ message: "No stores are associated with this user." });
         return;
       }
@@ -130,11 +127,15 @@ authRouter.post("/login", async (request: Request, response: Response) => {
 
 authRouter.post('/extend', requireAuth, async (request, response) => {
   const user = request.auth!;
+  if (Math.floor(Date.now() / 1000) - user.sessionStart >= SESSION_ABSOLUTE_MAX_SECONDS) {
+    response.status(401).json({ message: 'Session expired. Please sign in again.' });
+    return;
+  }
   const updated = await mongoose.connection.collection('users').findOne({
     _id: new mongoose.Types.ObjectId(user.id),
     isActive: { $ne: false },
   });
-  if (!updated || updated.role !== user.role) {
+  if (!updated || updated.role !== user.role || (updated.sessionVersion ?? 0) !== user.sessionVersion) {
     response.status(401).json({ message: 'Session expired.' });
     return;
   }
@@ -143,11 +144,16 @@ authRouter.post('/extend', requireAuth, async (request, response) => {
     name: String(updated.name ?? user.name ?? ''),
     email: String(updated.email ?? user.email ?? ''),
     role: String(updated.role),
-    sessionVersion: typeof updated.sessionVersion === 'number' ? updated.sessionVersion : 0,
+    sessionVersion: user.sessionVersion,
+    sessionStart: user.sessionStart,
   });
   response.json({ message: 'Session extended.', token });
 });
 
-authRouter.post('/logout', requireAuth, (_request, response) => {
+authRouter.post('/logout', requireAuth, async (request, response) => {
+  await mongoose.connection.collection('users').updateOne(
+    { _id: new mongoose.Types.ObjectId(request.auth!.id) },
+    { $inc: { sessionVersion: 1 } },
+  );
   response.json({ message: 'Logged out.' });
 });

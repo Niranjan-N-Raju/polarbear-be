@@ -14,6 +14,7 @@ import { franchiseAttendanceRouter } from "./routes/franchise-attendance.js";
 import { franchiseSalaryRouter } from "./routes/franchise-salary.js";
 import { healthRouter } from "./routes/health.js";
 import { profileRouter } from "./routes/profile.js";
+import { rejectDangerousKeys } from "./middleware/rejectDangerousKeys.js";
 
 export const app = express();
 
@@ -42,6 +43,7 @@ app.use((request, response, next) => {
 
   next();
 });
+app.use(rejectDangerousKeys);
 app.use("/api/auth", authRouter);
 app.use("/api", franchiseDashboardRouter);
 app.use("/api", franchiseInventoryRouter);
@@ -54,8 +56,6 @@ app.use("/api", franchiseSalaryRouter);
 app.use("/api", adminDashboardRouter);
 app.use("/api", adminStoresRouter);
 app.use("/api", adminUsersRouter);
-app.use("/api", adminUsersRouter);
-app.use("/api/me", profileRouter);
 app.use("/api/me", profileRouter);
 app.use("/api", healthRouter);
 

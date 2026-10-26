@@ -43,6 +43,54 @@ The seed requires an existing active admin account and associates the demo recor
 
 `POST /api/auth/login` accepts `{ "email": "...", "password": "..." }` and returns the authenticated user and an eight-hour bearer token. The React Native app uses this endpoint.
 
+`POST /api/auth/logout` requires a bearer token and increments the user's session version before returning success. This invalidates all existing sessions for that account, including extended tokens, across devices. A database failure returns an error rather than claiming revocation succeeded.
+
+### Authentication and authorization contract
+
+Tokens use HS256, issuer `polar-bear-backend`, audience `polar-bear-api`, and an
+eight-hour lifetime. Verification requires `exp`, `iat`, a valid MongoDB user
+`id`, and a nonnegative integer `sessionVersion`; tokens older than eight hours
+or issued in the future are rejected. Deploying this contract requires users
+with older tokens (including legacy Next.js tokens) to sign in again.
+
+Every authenticated request reloads the current account. Deleted/inactive
+accounts and mismatched session versions are rejected; the database role, not
+the signed role or client headers, determines permissions. Password changes
+require the current password, increment the session version, and return a new
+token. `/api/auth/extend` renews an authenticated session without rotating or
+invalidating its other access tokens. Sessions have a 24-hour absolute cap via
+the required `sessionStart` claim; extension never moves it and returns 401
+once the cap is reached. There is no refresh-token family or password-reset
+endpoint. Store access comes only from explicit `franchises` assignments,
+archived stores are read-only for store users, and administrators cannot
+modify or delete other administrators.
+
+The actual roles are `admin`, `sub_admin`, `franchise_admin`, and `employee`.
+All four can use their own `/api/me` and authenticated session endpoints.
+`admin` has global administrative reads and user management, with store
+mutations restricted to stores created by that admin. `franchise_admin` has
+operational access only to assigned or owned stores, checked on each request.
+There is no separate outlet-manager role or tenant-ID authorization mechanism;
+outlet isolation uses store/franchise IDs. `sub_admin` and `employee` currently
+have no operational-route access. Preserve these boundaries when adding routes.
+
+Use a dedicated signing secret for this API. Any other service holding the same
+symmetric key can mint matching issuer/audience claims; those claims are not
+isolation from another holder of the key. Mobile clients call logout before
+clearing local state; an offline/error fallback clears only local state and logs
+a warning, so server revocation is not guaranteed in that case.
+
+`tests/authorizationAudit.test.ts` exercises the explicit protected-route matrix,
+JWT/account checks, privilege escalation, and resource-level store predicates
+using real local HTTP requests and mocked database operations. Run it with
+`npx tsx --test tests/authorizationAudit.test.ts`. It does not substitute for
+integration testing against an isolated MongoDB deployment.
+
+The product catalog is global. Only platform `admin` accounts may create, rename,
+or delete products using `/api/products`; these operations do not require a store
+ID. Franchise admins can read the catalog with an authorized `storeId` and manage
+their own stock, but catalog mutations return `403`.
+
 ### Franchise-admin dashboard
 
 Franchise admins can use these bearer-authenticated endpoints:

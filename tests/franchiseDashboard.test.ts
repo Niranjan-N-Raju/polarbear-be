@@ -103,13 +103,11 @@ describe('franchise dashboard API', () => {
     assert.equal(saleQueries.length, 0);
   });
 
-  it('lists only assigned or created stores without leaking owner details', async () => {
+  it('lists only explicitly assigned stores without leaking owner details', async () => {
     const result = await request('/stores');
     assert.equal(result.status, 200);
     assert.deepEqual(await result.json(), { franchises: [{ _id: String(storeId), name: 'Central' }] });
-    assert.deepEqual(storeQueries[0].filter, {
-      $or: [{ createdBy: userId }, { _id: { $in: [String(storeId)] } }],
-    });
+    assert.deepEqual(storeQueries[0].filter, { _id: { $in: [String(storeId)] } });
     assert.deepEqual(storeQueries[1], {
       filter: { _id: { $in: [String(storeId)] } },
       projection: '_id name address storeCode isActive archivedAt',

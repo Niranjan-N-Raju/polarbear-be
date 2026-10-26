@@ -2,13 +2,12 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { Franchise } from '../models/Franchise.js';
-import { User } from '../models/User.js';
 import { auditLog } from '../utils/audit.js';
 import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
 import { firstValidationMessage, storeArchiveSchema, storeBodySchema } from '../utils/validation.js';
 
 export const adminStoresRouter = Router();
-adminStoresRouter.use(requireAuth, requireRole('admin'));
+adminStoresRouter.use('/stores', requireAuth, requireRole('admin'));
 
 function bodyTooLarge(requestBody: unknown, limit = 10_000): boolean {
   return Buffer.byteLength(JSON.stringify(requestBody ?? {}), 'utf8') > limit;
@@ -93,7 +92,6 @@ adminStoresRouter.post('/stores', async (request, response) => {
       createdBy: creatorId(auth.id),
     });
 
-    await User.findByIdAndUpdate(auth.id, { $addToSet: { franchises: franchise._id } });
     auditLog('store.created', {
       actorId: auth.id,
       actorRole: auth.role,

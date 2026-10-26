@@ -46,7 +46,7 @@ describe('franchise salary API', () => {
     assert.equal(created.status, 201);
     assert.equal(((await created.json()) as { advance: { type: string } }).advance.type, 'Emergency');
 
-    mock.method(Advance, 'findById', () => ({ franchise: storeId, _id: advanceId, save: async () => undefined }));
+    mock.method(Advance, 'findOne', () => queryResult({ franchise: storeId, _id: advanceId, save: async () => undefined }));
     const updated = await call('PUT', `/advances/${advanceId}`, { storeId: String(storeId), type: 'Loan', amount: 120 });
     assert.equal(updated.status, 200);
 

@@ -33,8 +33,17 @@ function isAdultDate(value: string) {
   cutoff.setFullYear(cutoff.getFullYear() - 18);
   return date <= cutoff;
 }
+const INTERNAL_USER_FIELDS = ['password', 'sessionVersion', 'createdBy', '__v'] as const;
+function documentSummary(value: unknown) {
+  if (!value || typeof value !== 'object') return value;
+  const { fileName, contentType, size } = value as Record<string, unknown>;
+  return { fileName, contentType, size };
+}
 function safeUser<T extends Record<string, unknown>>(user: T): T {
-  delete user.password;
+  for (const field of INTERNAL_USER_FIELDS) delete user[field];
+  for (const field of ['aadharDocument', 'panDocument'] as const) {
+    if (user[field]) (user as Record<string, unknown>)[field] = documentSummary(user[field]);
+  }
   return decryptUserFields(user);
 }
 
@@ -270,6 +279,7 @@ router.get('/users/:id/documents/:documentType', requireAuth, async (request, re
   if (!type) { response.status(400).json({ message: 'Invalid document type.' }); return; }
   const storeId = await resolveStore(request, response);
   if (!storeId) return;
+  if (!mongoose.isValidObjectId(String(request.params.id))) { response.status(404).json({ message: 'Document not found.' }); return; }
   const user = await User.findOne({ _id: String(request.params.id), role: 'employee', franchises: storeId }).select(documentFields[type]).lean();
   const metadata = user?.[documentFields[type]] as UserDocumentFile | undefined;
   if (!metadata?.fileId) { response.status(404).json({ message: 'Document not found.' }); return; }

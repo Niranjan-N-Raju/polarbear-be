@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
 import mongoose from 'mongoose';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
@@ -10,10 +11,25 @@ import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
 import { createUserSchema, firstValidationMessage, patchUserSchema, passwordSchema } from '../utils/validation.js';
 
 export const adminUsersRouter = Router();
-adminUsersRouter.use(requireAuth, requireRole('admin'));
+adminUsersRouter.use('/users', requireAuth, requireRole('admin'));
 
 function bodyTooLarge(requestBody: unknown, limit = 50_000): boolean {
   return Buffer.byteLength(JSON.stringify(requestBody ?? {}), 'utf8') > limit;
+}
+
+// Explicit allowlist: admin user views never carry password hashes, session counters,
+// encrypted Aadhaar/PAN/bank ciphertext, document storage ids, or audit internals.
+const ADMIN_USER_PROJECTION = '_id name email phone position employmentType salary role isActive actualDob dateOfJoining archivedAt franchises createdAt';
+type AdminUserSource = {
+  _id: unknown; name?: string; email?: string; phone?: string; position?: string; employmentType?: string;
+  salary?: number; role?: string; isActive?: boolean; actualDob?: Date; dateOfJoining?: Date; archivedAt?: Date; createdAt?: Date;
+};
+function adminUserView(user: AdminUserSource, franchises: Array<{ _id: string; name: string }>) {
+  return {
+    _id: String(user._id), name: user.name, email: user.email, phone: user.phone, position: user.position,
+    employmentType: user.employmentType, salary: user.salary, role: user.role, isActive: user.isActive !== false,
+    actualDob: user.actualDob, dateOfJoining: user.dateOfJoining, archivedAt: user.archivedAt, franchises, createdAt: user.createdAt,
+  };
 }
 
 function pageValue(value: unknown, fallback: number): number {
@@ -68,7 +84,7 @@ async function userListResponse(
   }
 
   if (singleId) {
-    const user = await User.findOne(query).select('-password').lean();
+    const user = await User.findOne(query).select(ADMIN_USER_PROJECTION).lean();
     if (!user) {
       response.status(404).json({ message: 'User not found.' });
       return;
@@ -77,11 +93,7 @@ async function userListResponse(
       .select('_id name')
       .lean();
     response.json({
-      user: {
-        ...user,
-        _id: String(user._id),
-        franchises: franchises.map((store) => ({ _id: String(store._id), name: store.name })),
-      },
+      user: adminUserView(user, franchises.map((store) => ({ _id: String(store._id), name: store.name }))),
     });
     return;
   }
@@ -89,7 +101,7 @@ async function userListResponse(
   const page = pageValue(request.query.page, 1);
   const limit = Math.min(500, pageValue(request.query.limit, 10));
   const [users, total] = await Promise.all([
-    User.find(query).select('-password').sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+    User.find(query).select(ADMIN_USER_PROJECTION).sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
     User.countDocuments(query),
   ]);
   const franchiseIds = [...new Set(users.flatMap((user) => (user.franchises ?? []).map(String)))];
@@ -99,25 +111,10 @@ async function userListResponse(
   const storeNames = new Map(stores.map((store) => [String(store._id), store.name]));
 
   response.json({
-    users: users.map((user) => ({
-      _id: String(user._id),
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-      position: user.position,
-      employmentType: user.employmentType,
-      salary: user.salary,
-      role: user.role,
-      isActive: user.isActive !== false,
-      actualDob: user.actualDob,
-      dateOfJoining: user.dateOfJoining,
-      archivedAt: user.archivedAt,
-      franchises: (user.franchises ?? []).map((id) => ({
-        _id: String(id),
-        name: storeNames.get(String(id)) ?? 'Unknown',
-      })),
-      createdAt: user.createdAt,
-    })),
+    users: users.map((user) => adminUserView(user, (user.franchises ?? []).map((id) => ({
+      _id: String(id),
+      name: storeNames.get(String(id)) ?? 'Unknown',
+    })))),
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
 }
@@ -174,8 +171,8 @@ adminUsersRouter.post('/users', async (request, response) => {
       return;
     }
   } else {
-    email = email || `emp_${Date.now()}@nologin.internal`;
-    password = password || Math.random().toString(36);
+    email = email || `emp_${randomBytes(12).toString('hex')}@nologin.internal`;
+    password = password || randomBytes(32).toString('hex');
   }
 
   if (role === 'franchise_admin' && (body.franchiseIds ?? []).length === 0) {
@@ -250,6 +247,10 @@ adminUsersRouter.patch('/users/:id', async (request, response) => {
     response.status(404).json({ message: 'User not found.' });
     return;
   }
+  if (target.role === 'admin') {
+    response.status(403).json({ message: 'Administrators can only be managed by themselves.' });
+    return;
+  }
 
   const { name, role, franchiseIds, phone } = parsed.data;
   if (role && !['sub_admin', 'franchise_admin', 'employee'].includes(role)) {
@@ -317,6 +318,10 @@ adminUsersRouter.delete('/users/:id', async (request, response) => {
   const target = await User.findById(id).select('_id role isActive archivedAt');
   if (!target) {
     response.status(404).json({ message: 'User not found.' });
+    return;
+  }
+  if (target.role === 'admin') {
+    response.status(403).json({ message: 'Administrators can only be managed by themselves.' });
     return;
   }
   if (target.role === 'employee') {

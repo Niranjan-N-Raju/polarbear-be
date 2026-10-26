@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import mongoose from 'mongoose';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 import { DumpedInventory, InventoryItem, Product } from '../models/Inventory.js';
 import { authorizeStore, isDateValue } from '../utils/storeAccess.js';
 
@@ -67,15 +67,18 @@ async function requireStore(request: Request, response: Response) {
 }
 
 router.get('/products', requireAuth, async (request, response, next) => {
+  if (request.auth?.role === 'admin') {
+    const products = await Product.find({}).sort({ name: 1 }).lean();
+    response.json({ products: products.map(serializeProduct) });
+    return;
+  }
   if (!isFranchiseAdmin(request)) { next(); return; }
   if (!(await requireStore(request, response))) return;
   const products = await Product.find({}).sort({ name: 1 }).lean();
   response.json({ products: products.map(serializeProduct) });
 });
 
-router.post('/products', requireAuth, async (request, response, next) => {
-  if (!isFranchiseAdmin(request)) { next(); return; }
-  if (!(await requireStore(request, response))) return;
+router.post('/products', requireAuth, requireRole('admin'), async (request, response) => {
   const { name } = bodyRecord(request);
   const names = typeof name === 'string'
     ? name.split(',').map((value) => value.trim()).filter(Boolean)
@@ -117,9 +120,7 @@ router.post('/products', requireAuth, async (request, response, next) => {
   response.status(201).json({ products: products.map(serializeProduct) });
 });
 
-router.patch('/products', requireAuth, async (request, response, next) => {
-  if (!isFranchiseAdmin(request)) { next(); return; }
-  if (!(await requireStore(request, response))) return;
+router.patch('/products', requireAuth, requireRole('admin'), async (request, response) => {
   const body = bodyRecord(request);
   const name = typeof body.name === 'string' ? body.name.trim() : '';
   const productId = typeof body.productId === 'string' ? body.productId : '';
@@ -146,9 +147,7 @@ router.patch('/products', requireAuth, async (request, response, next) => {
   response.json({ message: 'Product updated.' });
 });
 
-router.delete('/products', requireAuth, async (request, response, next) => {
-  if (!isFranchiseAdmin(request)) { next(); return; }
-  if (!(await requireStore(request, response))) return;
+router.delete('/products', requireAuth, requireRole('admin'), async (request, response) => {
   const body = bodyRecord(request);
   const productId = typeof body.productId === 'string' ? body.productId : '';
   if (!mongoose.isValidObjectId(productId)) {
@@ -295,4 +294,3 @@ router.patch('/inventory', requireAuth, async (request, response, next) => {
 
   response.status(400).json({ message: 'Unsupported inventory action.' });
 });
-

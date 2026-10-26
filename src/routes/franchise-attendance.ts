@@ -5,7 +5,7 @@ import { Attendance, type AttendanceRecord } from '../models/Attendance.js';
 import { Franchise } from '../models/Franchise.js';
 import { User } from '../models/User.js';
 import { WeeklyRoster } from '../models/WeeklyRoster.js';
-import { datesBetween, isValidDate, localDateValue } from '../utils/dateUtils.js';
+import { datesBetween, exceedsMaxRange, isValidDate, localDateValue, MAX_RANGE_DAYS } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { isDateValue } from '../utils/storeAccess.js';
@@ -76,6 +76,10 @@ router.get('/attendance', requireAuth, async (request, response, next) => {
   const hasRange = isDateValue(from) && isDateValue(to) && from <= to;
   if (!hasDate && !hasRange) {
     response.status(400).json({ message: 'A valid store and date range are required.' });
+    return;
+  }
+  if (!hasDate && exceedsMaxRange(from!, to!)) {
+    response.status(400).json({ message: `Date range cannot exceed ${MAX_RANGE_DAYS} days.` });
     return;
   }
 
@@ -159,6 +163,7 @@ router.get('/attendance/weekly-roster', requireAuth, async (request, response, n
   const to = stringQuery(request, 'to') ?? '';
   const hasRange = isDateValue(from) && isDateValue(to) && from <= to;
   if (!validMonday(weekStart) && !hasRange) { response.status(400).json({ message: 'A valid store and week start or date range are required.' }); return; }
+  if (hasRange && exceedsMaxRange(from, to)) { response.status(400).json({ message: `Date range cannot exceed ${MAX_RANGE_DAYS} days.` }); return; }
 
   const firstWeek = hasRange ? mondayOnOrBefore(from) : weekStart;
   const lastWeek = hasRange ? mondayOnOrBefore(to) : weekStart;

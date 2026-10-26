@@ -41,3 +41,9 @@ export function datesBetween(from: string, to: string): string[] {
   }
   return dates;
 }
+export const MAX_RANGE_DAYS = 366;
+
+// Expects YYYY-MM-DD values; caps query spans so range-driven loops and DB scans stay bounded.
+export function exceedsMaxRange(from: string, to: string, maxDays = MAX_RANGE_DAYS): boolean {
+  return Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > maxDays * 24 * 60 * 60 * 1000;
+}

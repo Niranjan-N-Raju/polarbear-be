@@ -66,7 +66,28 @@ async function call(method: string, path: string, body?: unknown) {
   });
 }
 
+function asPlatformAdmin() {
+  mock.method(User, 'findById', () => queryResult({
+    _id: userId, role: 'admin', sessionVersion: 0, isActive: true,
+  }));
+}
+
 describe('franchise inventory API', () => {
+  it('prevents franchise administrators from mutating the global catalog', async () => {
+    const update = mock.method(Product, 'updateOne', async () => ({}));
+    const remove = mock.method(Product, 'deleteOne', async () => ({}));
+    const insert = mock.method(Product.collection, 'insertMany', async () => ({}));
+    for (const method of ['POST', 'PATCH', 'DELETE']) {
+      const response = await call(method, '/products', {
+        storeId: String(storeId), productId: String(productId), name: 'Unauthorized rename',
+      });
+      assert.equal(response.status, 403);
+    }
+    assert.equal(update.mock.callCount(), 0);
+    assert.equal(remove.mock.callCount(), 0);
+    assert.equal(insert.mock.callCount(), 0);
+  });
+
   it('rejects stores the franchise admin cannot access', async () => {
     const response = await call('GET', `/inventory?storeId=${otherStoreId}`);
     assert.equal(response.status, 403);
@@ -87,6 +108,7 @@ describe('franchise inventory API', () => {
   });
 
   it('validates and creates comma-separated products', async () => {
+    asPlatformAdmin();
     let response = await call('POST', '/products', { storeId: String(storeId), name: ' , ' });
     assert.equal(response.status, 400);
     response = await call('POST', '/products', { storeId: String(storeId), name: 'Milk, milk' });
@@ -102,6 +124,7 @@ describe('franchise inventory API', () => {
   });
 
   it('rejects products that already exist without inserting', async () => {
+    asPlatformAdmin();
     mock.method(Product, 'find', () => queryResult([{ _id: productId }]));
     const insertMany = mock.method(Product.collection, 'insertMany', async () => ({}));
     const response = await call('POST', '/products', { storeId: String(storeId), name: 'Milk' });
@@ -110,6 +133,7 @@ describe('franchise inventory API', () => {
   });
 
   it('blocks deleting products with stock history', async () => {
+    asPlatformAdmin();
     mock.method(Product, 'findById', () => queryResult({ _id: productId }));
     mock.method(InventoryItem, 'countDocuments', async () => 0);
     mock.method(DumpedInventory, 'countDocuments', async () => 1);
@@ -117,6 +141,19 @@ describe('franchise inventory API', () => {
     const response = await call('DELETE', '/products', { storeId: String(storeId), productId: String(productId) });
     assert.equal(response.status, 409);
     assert.equal(deleteOne.mock.callCount(), 0);
+  });
+
+  it('allows only a platform administrator to rename a shared product', async () => {
+    asPlatformAdmin();
+    mock.method(Product, 'findById', () => queryResult({ _id: productId }));
+    const update = mock.method(Product, 'updateOne', async () => ({}));
+    const stockUpdate = mock.method(InventoryItem, 'updateMany', async () => ({}));
+    const response = await call('PATCH', '/products', { productId: String(productId), name: 'Fresh Milk' });
+    assert.equal(response.status, 200);
+    assert.deepEqual(update.mock.calls[0]?.arguments, [
+      { _id: productId }, { $set: { name: 'Fresh Milk', normalizedName: 'fresh milk' } },
+    ]);
+    assert.equal(stockUpdate.mock.callCount(), 1);
   });
 
   it('upserts stock for a predefined product', async () => {

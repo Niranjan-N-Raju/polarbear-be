@@ -130,20 +130,15 @@ async function updateEntry(kind: EntryKind, request: import('express').Request, 
   const idLabel = kind === "extraDay" ? "extra day" : kind;
   if (!mongoose.isValidObjectId(entryId)) { response.status(400).json({ message: "A valid " + idLabel + " id is required." }); return; }
 
-  const body = bodyRecord(request);
-  const type = typeof body.type === "string" ? body.type.trim() : "";
-  if (!type) { response.status(400).json({ message: "A valid type is required." }); return; }
-  const field = kind === "extraDay" ? "days" : "amount";
-  const value = Number(body[field]);
-  if (!Number.isFinite(value) || value < 0) { response.status(400).json({ message: kind === "extraDay" ? "A valid number of days is required." : "A valid amount is required." }); return; }
-  const updateValue = { type, [field]: value };
-
-  const entry = await collections[kind].findById(entryId);
-  if (!entry) { response.status(404).json({ message: kind === "extraDay" ? "Extra days entry not found." : kind === "advance" ? "Advance not found." : "Incentive not found." }); return; }
+  const validated = validateEntry(bodyRecord(request), kind);
+  if ('error' in validated) { response.status(400).json({ message: validated.error }); return; }
+  const updateValue = validated.value;
 
   const storeId = await requireStore(request, response);
   if (!storeId) return;
-  if (id(entry.franchise) !== id(storeId)) { response.status(403).json({ message: "Access denied." }); return; }
+  const entry = await collections[kind].findOne({ _id: entryId, franchise: storeId });
+  if (!entry) { response.status(404).json({ message: kind === "extraDay" ? "Extra days entry not found." : kind === "advance" ? "Advance not found." : "Incentive not found." }); return; }
+
   Object.assign(entry, updateValue);
   await entry.save();
   response.json({ message: kind === "extraDay" ? "Extra days updated." : kind === "advance" ? "Advance updated." : "Incentive updated.", id: id(entry._id), ...updateValue });
@@ -161,10 +156,10 @@ async function deleteEntry(kind: EntryKind, request: import('express').Request, 
 }
 for (const kind of ['advance', 'incentive', 'extraDay'] as const) {
   const path = kind === 'extraDay' ? '/extra-days' : `/${kind}s`;
-  router.get(path, requireAuth, (req, res, next) => void listEntry(kind, req, res, next));
-  router.post(path, requireAuth, (req, res, next) => void createEntry(kind, req, res, next));
-  router.put(`${path}/:id`, requireAuth, (req, res, next) => void updateEntry(kind, req, res, next));
-  router.delete(`${path}/:id`, requireAuth, (req, res, next) => void deleteEntry(kind, req, res, next));
+  router.get(path, requireAuth, (req, res, next) => listEntry(kind, req, res, next));
+  router.post(path, requireAuth, (req, res, next) => createEntry(kind, req, res, next));
+  router.put(`${path}/:id`, requireAuth, (req, res, next) => updateEntry(kind, req, res, next));
+  router.delete(`${path}/:id`, requireAuth, (req, res, next) => deleteEntry(kind, req, res, next));
 }
 
 router.get('/salary/slip', requireAuth, async (request, response, next) => {
