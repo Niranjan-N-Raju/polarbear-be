@@ -96,4 +96,9 @@ describe('user and profile schemas', () => {
       assert.equal(firstValidationMessage(invalidProfile.error), 'Password must be at least 12 characters.');
     }
   });
+
+  it('accepts supported preferred languages and rejects unknown languages', () => {
+    assert.deepEqual(profileSchema.parse({ preferredLanguage: 'kn' }), { preferredLanguage: 'kn' });
+    assert.equal(profileSchema.safeParse({ preferredLanguage: 'xx' }).success, false);
+  });
 });

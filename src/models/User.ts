@@ -26,6 +26,7 @@ export interface UserRecord {
   password?: string;
   name: string;
   role: UserRole;
+  preferredLanguage?: 'en' | 'kn';
   isActive?: boolean;
   sessionVersion?: number;
   mustChangePassword?: boolean;
@@ -58,6 +59,7 @@ const userSchema = new Schema<UserRecord>(
     email: { type: String, required: true, lowercase: true, trim: true },
     password: { type: String, required: true, select: false },
     name: { type: String, required: true, trim: true },
+    preferredLanguage: { type: String, enum: ['en', 'kn'], default: 'en' },
     role: {
       type: String,
       enum: ['admin', 'sub_admin', 'franchise_admin', 'employee'],

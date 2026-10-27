@@ -21,6 +21,7 @@ interface LoginUser {
   password: string;
   name: string;
   role: "admin" | "sub_admin" | "franchise_admin" | "employee";
+  preferredLanguage?: "en" | "kn";
   isActive?: boolean;
   sessionVersion?: number;
   franchises?: unknown[];
@@ -125,6 +126,7 @@ authRouter.post("/login", async (request: Request, response: Response) => {
         email: user.email,
         role: user.role,
         mustChangePassword: user.mustChangePassword === true,
+        preferredLanguage: user.preferredLanguage ?? "en",
       },
     });
   } catch {

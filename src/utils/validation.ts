@@ -56,6 +56,7 @@ export const patchUserSchema = z.object({
 
 export const profileSchema = z.object({
   name: nameSchema.optional(),
+  preferredLanguage: z.enum(['en', 'kn']).optional(),
   currentPassword: z.string().max(200).optional(),
   newPassword: passwordSchema.optional(),
 });

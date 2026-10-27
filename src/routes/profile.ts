@@ -10,7 +10,7 @@ import { signSessionToken } from '../utils/token.js';
 export const profileRouter = Router();
 
 profileRouter.get('/', requireAuth, async (request, response) => {
-  const user = await User.findById(request.auth!.id).select('_id name email role mustChangePassword').lean();
+  const user = await User.findById(request.auth!.id).select('_id name email role mustChangePassword preferredLanguage').lean();
   if (!user) {
     response.status(401).json({ message: 'Unauthorized' });
     return;
@@ -21,6 +21,7 @@ profileRouter.get('/', requireAuth, async (request, response) => {
     email: user.email,
     role: user.role,
     mustChangePassword: user.mustChangePassword === true,
+    preferredLanguage: user.preferredLanguage ?? 'en',
   });
 });
 
@@ -42,7 +43,7 @@ profileRouter.patch('/', requireAuth, async (request, response) => {
     return;
   }
 
-  const { name, currentPassword, newPassword } = parsed.data;
+  const { name, preferredLanguage, currentPassword, newPassword } = parsed.data;
   if (newPassword !== undefined && !currentPassword) {
     response.status(400).json({ message: 'Current password is required to set a new password.' });
     return;
@@ -68,6 +69,7 @@ profileRouter.patch('/', requireAuth, async (request, response) => {
     }
     user.name = normalizedName;
   }
+  if (preferredLanguage !== undefined) user.preferredLanguage = preferredLanguage;
   if (newPassword !== undefined) {
     if (!(await bcrypt.compare(currentPassword!, user.password!))) {
       response.status(400).json({ message: 'Current password is incorrect.' });
@@ -81,7 +83,7 @@ profileRouter.patch('/', requireAuth, async (request, response) => {
     user.sessionVersion = (user.sessionVersion ?? 0) + 1;
     user.mustChangePassword = false;
   }
-  if (name === undefined && newPassword === undefined) {
+  if (name === undefined && preferredLanguage === undefined && newPassword === undefined) {
     response.status(400).json({ message: 'No fields to update.' });
     return;
   }
