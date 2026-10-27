@@ -262,12 +262,25 @@ router.patch('/inventory', requireAuth, async (request, response, next) => {
       return;
     }
     const updated = await InventoryItem.findOneAndUpdate(
-      { _id: itemId, storeId, quantity: { $gte: quantity } },
+      { _id: itemId, storeId, quantity: { $gte: quantity }, expiryDate: { $gte: today } },
       { $inc: { quantity: -quantity } },
       { new: true, lean: true },
     );
     if (!updated) {
       response.status(400).json({ message: 'Not enough stock available.' });
+      return;
+    }
+    // Re-validate FIFO after the atomic decrement: an earlier batch restocked concurrently
+    // between the check above and the update means this consumption must be reverted.
+    const racedEarlier = await InventoryItem.findOne({
+      storeId,
+      productId: item.productId,
+      expiryDate: { $gte: today, $lt: item.expiryDate },
+      quantity: { $gt: 0 },
+    }).sort({ expiryDate: 1 }).lean();
+    if (racedEarlier) {
+      await InventoryItem.updateOne({ _id: itemId, storeId }, { $inc: { quantity } });
+      response.status(409).json({ message: `Use the earlier expiry ${racedEarlier.expiryDate} first.` });
       return;
     }
     auditMutation(request, 'inventory.stock.consumed', { storeId, targetId: itemId, before: { quantity: updated.quantity + quantity }, after: { quantity: updated.quantity, quantityConsumed: quantity } });

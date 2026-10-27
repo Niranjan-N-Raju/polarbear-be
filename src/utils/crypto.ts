@@ -17,6 +17,7 @@ import {
 
 const ALGORITHM: CipherGCMTypes = "aes-256-gcm";
 const ENCRYPTED_PREFIX = "enc:";
+const AUTH_TAG_BYTES = 16;
 
 function getKey(): Buffer {
   const hex = process.env.FIELD_ENCRYPTION_KEY;
@@ -65,7 +66,9 @@ export function decrypt(stored: string): string {
   const iv = Buffer.from(ivB64, "base64url");
   const tag = Buffer.from(tagB64, "base64url");
   const ciphertext = Buffer.from(ctB64, "base64url");
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
+  // Pin the GCM tag length; otherwise Node accepts truncated (4-15 byte) tags and weakens integrity.
+  if (iv.length !== 12 || tag.length !== AUTH_TAG_BYTES) throw new Error("Invalid encrypted field format.");
+  const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_BYTES });
   decipher.setAuthTag(tag);
   return decipher.update(ciphertext).toString("utf8") + decipher.final("utf8");
 }
@@ -84,7 +87,7 @@ export function decryptBuffer(stored: Buffer): Buffer {
   const iv = stored.subarray(0, 12);
   const tag = stored.subarray(12, 28);
   const ciphertext = stored.subarray(28);
-  const decipher = createDecipheriv(ALGORITHM, getKey(), iv);
+  const decipher = createDecipheriv(ALGORITHM, getKey(), iv, { authTagLength: AUTH_TAG_BYTES });
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }

@@ -28,6 +28,7 @@ export interface UserRecord {
   role: UserRole;
   isActive?: boolean;
   sessionVersion?: number;
+  mustChangePassword?: boolean;
   archivedAt?: Date;
   franchises: mongoose.Types.ObjectId[];
   createdBy?: mongoose.Types.ObjectId;
@@ -64,6 +65,7 @@ const userSchema = new Schema<UserRecord>(
     },
     isActive: { type: Boolean, default: true },
     sessionVersion: { type: Number, default: 0, min: 0 },
+    mustChangePassword: { type: Boolean, default: false },
     archivedAt: { type: Date },
     franchises: [{ type: Schema.Types.ObjectId, ref: 'Franchise' }],
     createdBy: { type: Schema.Types.ObjectId, ref: 'User' },

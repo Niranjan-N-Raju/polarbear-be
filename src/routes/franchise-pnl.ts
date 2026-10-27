@@ -22,6 +22,7 @@ const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.ex
 export const franchisePnlRouter = Router();
 const router = franchisePnlRouter;
 const MAX_MONTHS = 36;
+const MAX_PERIOD_WALK = 1200;
 const MAX_FIELDS = 200;
 const FIELD_KEY_PATTERN = /^[a-zA-Z][a-zA-Z0-9]{0,49}$/;
 
@@ -77,7 +78,8 @@ router.get('/pnl', requireAuth, expensiveReadLimiter, async (request, response, 
 
   const earliestPeriod = periodForDate(earliestSale.date, cycleType, startDay);
   const periods: string[] = [];
-  for (let cursor = earliestPeriod; cursor <= currentPeriod && periods.length < MAX_MONTHS; cursor = nextPeriod(cursor)) {
+  // Walk the full history (hard-capped) and keep the newest MAX_MONTHS periods.
+  for (let cursor = earliestPeriod; cursor <= currentPeriod && periods.length < MAX_PERIOD_WALK; cursor = nextPeriod(cursor)) {
     periods.push(cursor);
   }
   const periodsToShow = periods.slice(-MAX_MONTHS);

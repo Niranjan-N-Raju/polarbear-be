@@ -11,6 +11,22 @@ export interface AuthInfo {
   email?: string;
   sessionVersion: number;
   sessionStart: number;
+  mustChangePassword?: boolean;
+}
+
+// Routes a user who still holds an admin-issued password may reach: read/update own profile
+// (the password change itself), extend and log out. Everything else is refused until the
+// password is replaced.
+const PASSWORD_CHANGE_ALLOWED = new Set([
+  'GET /api/me',
+  'PATCH /api/me',
+  'POST /api/auth/logout',
+  'POST /api/auth/extend',
+]);
+
+function routeKey(request: Request): string {
+  const path = (request.originalUrl.split('?')[0] ?? '').replace(/\/+$/, '').toLowerCase();
+  return `${request.method.toUpperCase()} ${path}`;
 }
 
 declare global {
@@ -63,7 +79,7 @@ export async function requireAuth(
 
   try {
     const user = await User.findById(id)
-      .select('_id name email role isActive sessionVersion')
+      .select('_id name email role isActive sessionVersion mustChangePassword')
       .lean();
     const currentVersion = typeof user?.sessionVersion === 'number' ? user.sessionVersion : 0;
     const tokenVersion =
@@ -85,7 +101,15 @@ export async function requireAuth(
       email: user.email,
       sessionVersion: currentVersion,
       sessionStart,
+      mustChangePassword: user.mustChangePassword === true,
     };
+    if (user.mustChangePassword === true && !PASSWORD_CHANGE_ALLOWED.has(routeKey(request))) {
+      response.status(403).json({
+        message: 'You must change your password before continuing.',
+        code: 'PASSWORD_CHANGE_REQUIRED',
+      });
+      return;
+    }
     next();
   } catch (error) {
     next(error);

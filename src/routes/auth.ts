@@ -24,6 +24,7 @@ interface LoginUser {
   isActive?: boolean;
   sessionVersion?: number;
   franchises?: unknown[];
+  mustChangePassword?: boolean;
 }
 
 const LOGIN_RATE_MESSAGE = "Too many login attempts. Please try again later.";
@@ -66,11 +67,16 @@ authRouter.post("/login", async (request: Request, response: Response) => {
   }
 
   const normalizedEmail = email.toLowerCase().trim();
-  const accountKey = `login-account-failures:${normalizedEmail}`;
-  const accountLimit = peekRateLimit(accountKey);
-  if (!accountLimit.allowed) {
-    sendRateLimited(response, accountLimit.retryAfterMs, LOGIN_RATE_MESSAGE);
-    return;
+  // Lockout is keyed per (account, IP) so a third party cannot lock a user out from elsewhere;
+  // a separate, much higher per-account ceiling still caps distributed guessing.
+  const accountKey = `login-account-ip-failures:${normalizedEmail}:${ip}`;
+  const accountGlobalKey = `login-account-failures:${normalizedEmail}`;
+  for (const key of [accountKey, accountGlobalKey]) {
+    const accountLimit = peekRateLimit(key);
+    if (!accountLimit.allowed) {
+      sendRateLimited(response, accountLimit.retryAfterMs, LOGIN_RATE_MESSAGE);
+      return;
+    }
   }
 
   try {
@@ -86,6 +92,7 @@ authRouter.post("/login", async (request: Request, response: Response) => {
     );
     if (!user || typeof user.password !== "string" || !passwordMatches) {
       recordRateLimitFailure(accountKey, rateLimits.loginAccountFailures);
+      recordRateLimitFailure(accountGlobalKey, rateLimits.loginAccountGlobalFailures);
       recordRateLimitFailure(`login-ip-failures:${ip}`, rateLimits.loginIpFailures);
       response.status(401).json({ message: "Invalid email or password." });
       return;
@@ -101,6 +108,7 @@ authRouter.post("/login", async (request: Request, response: Response) => {
     // Only the account failure counter resets; per-IP budgets are never cleared by a success,
     // so an attacker with one valid account cannot reset their IP throttle.
     resetRateLimit(accountKey);
+    resetRateLimit(accountGlobalKey);
     const token = await signSessionToken({
       id: user._id.toString(),
       name: user.name,
@@ -116,6 +124,7 @@ authRouter.post("/login", async (request: Request, response: Response) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        mustChangePassword: user.mustChangePassword === true,
       },
     });
   } catch {

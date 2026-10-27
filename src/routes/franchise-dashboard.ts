@@ -20,6 +20,8 @@ const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.ex
 
 export const franchiseDashboardRouter = Router();
 
+const MAX_INSIGHT_SALES = 400;
+
 function dateRange(request: Request, response: Response) {
   const from = request.query.from;
   const to = request.query.to;
@@ -62,6 +64,8 @@ franchiseDashboardRouter.get('/dashboard', requireAuth, expensiveReadLimiter, as
   const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   const monthFrom = `${monthPrefix}-01`;
   const monthTo = `${monthPrefix}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`;
+  const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+  const insightsFrom = `${yearAgo.getFullYear()}-${String(yearAgo.getMonth() + 1).padStart(2, '0')}-${String(yearAgo.getDate()).padStart(2, '0')}`;
   const [employeeSummary, monthlySales, employees, sales] = await Promise.all([
     User.countDocuments({
       franchises: storeObjectId,
@@ -75,8 +79,11 @@ franchiseDashboardRouter.get('/dashboard', requireAuth, expensiveReadLimiter, as
     User.find({ franchises: storeObjectId, role: 'employee' })
       .select('dateOfJoining archivedAt isActive')
       .lean(),
-    Sale.find({ franchise: storeObjectId })
+    // Insights cover the trailing year so the scan stays bounded as store history grows.
+    Sale.find({ franchise: storeObjectId, date: { $gte: insightsFrom } })
       .select('date totalSale swiggy zomato upi cash expenses')
+      .sort({ date: -1 })
+      .limit(MAX_INSIGHT_SALES)
       .lean(),
   ]);
 
@@ -108,6 +115,7 @@ franchiseDashboardRouter.get('/sales', requireAuth, expensiveReadLimiter, async 
   })
     .select('date totalSale swiggy zomato upi upiCharge cash expenses totalExpenses bankingCash')
     .sort({ date: -1 })
+    .limit(MAX_INSIGHT_SALES)
     .lean();
   response.json({ sales: sales.map(withSaleTotals) });
 });

@@ -22,6 +22,11 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Platform admins manage store identity and owner contact; store operations (shifts, positions,
+// salary cycle, logo blob refs) belong to the franchise admin and are not returned here.
+const ADMIN_STORE_LIST_FIELDS =
+  'name storeCode storeType description address phone ownerName ownerPhone ownerEmail isActive archivedAt createdBy createdAt updatedAt';
+
 adminStoresRouter.get('/stores', async (request, response) => {
   const page = clampPage(Math.max(1, Number.parseInt(String(request.query.page ?? '1'), 10) || 1));
   const limit = Math.min(100, Math.max(1, Number.parseInt(String(request.query.limit ?? '10'), 10) || 10));
@@ -56,12 +61,20 @@ adminStoresRouter.get('/stores', async (request, response) => {
     query.storeType = request.query.type;
   }
   const [franchises, total] = await Promise.all([
-    Franchise.find(query).sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+    Franchise.find(query).select(ADMIN_STORE_LIST_FIELDS).sort({ name: 1 }).skip((page - 1) * limit).limit(limit).lean(),
     Franchise.countDocuments(query),
   ]);
 
+  const viewerId = request.auth!.id;
+  // Owner contact details are only needed by the admin who manages (created) the store.
+  const visibleFranchises = franchises.map((store) => {
+    if (String(store.createdBy ?? '') === viewerId) return store;
+    const { ownerPhone: _ownerPhone, ownerEmail: _ownerEmail, ...rest } = store;
+    return rest;
+  });
+
   response.json({
-    franchises,
+    franchises: visibleFranchises,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   });
 });

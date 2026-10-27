@@ -213,6 +213,8 @@ adminUsersRouter.post('/users', async (request, response) => {
     isActive: true,
     createdBy: new mongoose.Types.ObjectId(auth.id),
     franchises: role === 'sub_admin' ? [] : franchiseIds,
+    // The creating admin knows this password, so the user must replace it before using the app.
+    mustChangePassword: true,
   });
   auditLog('user.created', {
     actorId: auth.id,
@@ -263,11 +265,15 @@ adminUsersRouter.patch('/users/:id', async (request, response) => {
     return;
   }
   const effectiveRole = role ?? target.role;
-  if (effectiveRole === 'franchise_admin' && franchiseIds?.length === 0) {
+  const roleChanged = role !== undefined && role !== target.role;
+  // When the role changes without new assignments, the existing assignments must still be valid
+  // for the new role; otherwise a stale store list would silently grant the new role store access.
+  const effectiveStoreCount = franchiseIds?.length ?? (effectiveRole === 'sub_admin' ? 0 : target.franchises.length);
+  if (effectiveRole === 'franchise_admin' && (franchiseIds !== undefined || roleChanged) && effectiveStoreCount === 0) {
     response.status(400).json({ message: 'Store admin must be assigned to at least one store.' });
     return;
   }
-  if (effectiveRole === 'employee' && franchiseIds && franchiseIds.length !== 1) {
+  if (effectiveRole === 'employee' && (franchiseIds !== undefined || roleChanged) && effectiveStoreCount !== 1) {
     response.status(400).json({ message: 'An employee must be assigned to exactly one store.' });
     return;
   }
@@ -293,6 +299,11 @@ adminUsersRouter.patch('/users/:id', async (request, response) => {
   if (name !== undefined) target.name = name;
   if (role !== undefined) target.role = role;
   if (franchiseIds !== undefined) target.franchises = franchiseIds.map((storeId) => new mongoose.Types.ObjectId(storeId));
+  // Sub-admins are never store-scoped; drop any assignments left over from a previous role.
+  if (effectiveRole === 'sub_admin' && target.franchises.length > 0) {
+    target.franchises = [];
+    target.sessionVersion = (target.sessionVersion ?? 0) + (roleChanged || assignmentsChanged ? 0 : 1);
+  }
   if (phone !== undefined) target.phone = phone;
   await target.save();
 

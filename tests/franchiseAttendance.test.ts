@@ -19,6 +19,7 @@ describe('franchise attendance API', () => {
 
   it('lists attendance records in date range and applies roster defaults', async () => {
     let findFilter: Record<string, unknown> | undefined;
+    mock.method(Franchise, 'findById', () => queryResult({ _id: storeId, isActive: true }));
     mock.method(WeeklyRoster, 'find', () => queryResult([{ createdBy: new mongoose.Types.ObjectId(), entries: [{ employee: employeeId, days: [{ date: '2026-01-05', shift: 'off' }] }] }]));
     mock.method(Attendance, 'bulkWrite', async (operations: unknown[]) => { assert.equal(operations.length, 1); });
     mock.method(Attendance, 'find', (filter: Record<string, unknown>) => { findFilter = filter; return queryResult([{ employee: employeeId, date: '2026-01-05', status: 'Week Off' }]); });

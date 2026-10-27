@@ -25,6 +25,7 @@ function queryResult(value: unknown) {
   return {
     select() { return this; },
     sort() { return this; },
+    limit() { return this; },
     lean: async () => value,
   };
 }

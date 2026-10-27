@@ -10,12 +10,18 @@ import { signSessionToken } from '../utils/token.js';
 export const profileRouter = Router();
 
 profileRouter.get('/', requireAuth, async (request, response) => {
-  const user = await User.findById(request.auth!.id).select('_id name email role').lean();
+  const user = await User.findById(request.auth!.id).select('_id name email role mustChangePassword').lean();
   if (!user) {
     response.status(401).json({ message: 'Unauthorized' });
     return;
   }
-  response.json({ id: String(user._id), name: user.name, email: user.email, role: user.role });
+  response.json({
+    id: String(user._id),
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    mustChangePassword: user.mustChangePassword === true,
+  });
 });
 
 profileRouter.patch('/', requireAuth, async (request, response) => {
@@ -67,8 +73,13 @@ profileRouter.patch('/', requireAuth, async (request, response) => {
       response.status(400).json({ message: 'Current password is incorrect.' });
       return;
     }
+    if (user.mustChangePassword === true && (await bcrypt.compare(newPassword, user.password!))) {
+      response.status(400).json({ message: 'Choose a new password that differs from the one you were given.' });
+      return;
+    }
     user.password = await bcrypt.hash(newPassword, 12);
     user.sessionVersion = (user.sessionVersion ?? 0) + 1;
+    user.mustChangePassword = false;
   }
   if (name === undefined && newPassword === undefined) {
     response.status(400).json({ message: 'No fields to update.' });
@@ -76,10 +87,11 @@ profileRouter.patch('/', requireAuth, async (request, response) => {
   }
 
   await user.save();
-  auditLog('user.password.changed', {
+  auditLog(newPassword !== undefined ? 'user.password.changed' : 'user.profile.updated', {
     actorId: auth.id,
     actorRole: auth.role,
     ip: request.ip,
+    metadata: { fields: Object.keys(parsed.data).filter((key) => key !== 'currentPassword' && key !== 'newPassword').concat(newPassword !== undefined ? ['password'] : []) },
   });
   const token = await signSessionToken({
     id: String(user._id),
@@ -88,5 +100,5 @@ profileRouter.patch('/', requireAuth, async (request, response) => {
     role: user.role,
     sessionVersion: user.sessionVersion,
   });
-  response.json({ message: 'Profile updated', token });
+  response.json({ message: 'Profile updated', token, mustChangePassword: user.mustChangePassword === true });
 });

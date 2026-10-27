@@ -115,6 +115,23 @@ function parseEmployee(body: Record<string, unknown>, requireName = true): { val
   return { value };
 }
 
+const SAFE_DOCUMENT_TYPES = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+const MAX_FILE_NAME_LENGTH = 100;
+
+export function sanitizeFileName(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const base = value.split(/[\\/]/).pop() ?? '';
+  // Strip control characters, quotes and header/path metacharacters.
+  const cleaned = base.replace(/[\u0000-\u001f\u007f"<>:|?*;\\]/g, '').replace(/\s+/g, ' ').trim();
+  return Array.from(cleaned).slice(0, MAX_FILE_NAME_LENGTH).join('').replace(/^\.+/, '');
+}
+
+export function contentDisposition(fileName: string): string {
+  const safe = sanitizeFileName(fileName) || 'document';
+  const ascii = safe.replace(/[^\x20-\x7e]/g, '_').replace(/[%]/g, '_');
+  return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(safe)}`;
+}
+
 router.get('/users', requireAuth, async (request, response, next) => {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await resolveStore(request, response);
@@ -254,12 +271,12 @@ router.post('/users/:id/documents/:documentType', requireAuth, uploadLimiter, as
   const bytes = decodeBase64Upload(body.base64 ?? body.file ?? body.data, MAX_FILE_SIZE);
   if (!bytes) { response.status(400).json({ message: 'Document request is invalid or too large.' }); return; }
   const contentType = detectAllowedUploadType(bytes);
-  if (!contentType || !['application/pdf', 'image/jpeg', 'image/png'].includes(contentType)) {
+  if (!contentType || !SAFE_DOCUMENT_TYPES.has(contentType)) {
     response.status(400).json({ message: 'Only valid PDF, JPEG, and PNG files are allowed.' }); return;
   }
   const target = await targetForStore(String(request.params.id), storeId) as UserWithDocuments | null;
   if (!target) { response.status(404).json({ message: 'User not found.' }); return; }
-  const fileName = typeof body.fileName === 'string' && body.fileName.trim() ? body.fileName.trim().slice(0, 255) : `${type}.${contentType === 'application/pdf' ? 'pdf' : contentType === 'image/png' ? 'png' : 'jpg'}`;
+  const fileName = sanitizeFileName(body.fileName) || `${type}.${contentType === 'application/pdf' ? 'pdf' : contentType === 'image/png' ? 'png' : 'jpg'}`;
   const field = documentFields[type];
   const previous = target[field];
   const bucket = getBucket('employeeDocuments');
@@ -293,8 +310,9 @@ router.get('/users/:id/documents/:documentType', requireAuth, uploadLimiter, asy
     for await (const chunk of getBucket('employeeDocuments').openDownloadStream(metadata.fileId)) chunks.push(Buffer.from(chunk));
     const bytes = decryptBuffer(Buffer.concat(chunks));
     response.setHeader('Cache-Control', 'private, no-store');
-    response.setHeader('Content-Type', metadata.contentType);
-    response.setHeader('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(metadata.fileName)}`);
+    response.setHeader('Content-Type', SAFE_DOCUMENT_TYPES.has(metadata.contentType) ? metadata.contentType : 'application/octet-stream');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
+    response.setHeader('Content-Disposition', contentDisposition(metadata.fileName));
     response.send(bytes);
   } catch {
     response.status(404).json({ message: 'Document could not be read.' });

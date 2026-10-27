@@ -8,7 +8,7 @@ import { WeeklyRoster } from '../models/WeeklyRoster.js';
 import { datesBetween, exceedsMaxRange, isValidDate, localDateValue, MAX_RANGE_DAYS } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
-import { isDateValue } from '../utils/storeAccess.js';
+import { isArchivedStore, isDateValue } from '../utils/storeAccess.js';
 import { auditMutation } from '../utils/businessLimits.js';
 import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
 
@@ -87,7 +87,9 @@ router.get('/attendance', requireAuth, expensiveReadLimiter, async (request, res
     return;
   }
 
-  if (hasRange) {
+  // GET is treated as read-only by authorizeStore, so explicitly avoid materializing rows for archived stores.
+  const storeState = hasRange ? await Franchise.findById(storeId).select('isActive archivedAt').lean() : null;
+  if (hasRange && storeState && !isArchivedStore(storeState)) {
     const rosters = await WeeklyRoster.find({ franchise: storeId, 'entries.days.date': { $gte: from, $lte: to } }).lean();
     const defaults = rosters.flatMap((roster) => roster.entries.flatMap((entry) => entry.days
       .filter((day) => day.date >= from! && day.date <= to!)
