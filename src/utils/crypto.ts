@@ -4,8 +4,8 @@
  * Required env var: FIELD_ENCRYPTION_KEY — a 64-character hex string (32 bytes).
  * Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
  *
- * If the key is absent the functions warn and fall through (plaintext storage),
- * so existing deployments are not broken. Set the key before storing real PII.
+ * If the key is absent, encryptField() throws in production (fail closed) and stores
+ * plaintext only in non-production. encrypt()/decrypt() of encrypted values always require it.
  */
 
 import {

@@ -13,7 +13,8 @@
     "start": "node dist/server.js",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "seed:demo": "tsx scripts/seedDemoData.ts"
+    "seed:demo": "tsx scripts/seedDemoData.ts",
+    "migrate:encrypt-pii": "tsx scripts/encryptLegacyPii.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
