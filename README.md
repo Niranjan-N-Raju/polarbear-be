@@ -39,6 +39,15 @@ The seed requires an existing active admin account and associates the demo recor
 
 ## API
 
+`GET /api/greet` is public and returns `200` with
+`{"message":"Hello! Welcome to Vajan PB."}`. No bearer token or login is required.
+It does not query MongoDB, and the existing API rate limit still applies.
+For local testing with the backend running:
+
+```sh
+curl http://localhost:4000/api/greet
+```
+
 `GET /api/health` returns `200` with `{"status":"ok","database":"connected"}` when MongoDB is connected, or `503` when disconnected. Startup requires a successful MongoDB connection before accepting HTTP requests.
 
 `POST /api/auth/login` accepts `{ "email": "...", "password": "..." }` and returns the authenticated user and an eight-hour bearer token. The React Native app uses this endpoint.

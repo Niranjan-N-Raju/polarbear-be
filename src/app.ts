@@ -40,6 +40,9 @@ app.use("/api", (request, response, next) => {
 app.use(UPLOAD_PATHS, express.json({ limit: "8mb" }));
 app.use(express.json({ limit: "1mb" }));
 app.use(rejectDangerousKeys);
+app.get("/api/greet", (_request, response) => {
+  response.json({ message: "Hello! Welcome to Vajan PB." });
+});
 app.use("/api/auth", authRouter);
 app.use("/api", franchiseDashboardRouter);
 app.use("/api", franchiseInventoryRouter);
