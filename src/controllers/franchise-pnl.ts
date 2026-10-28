@@ -55,6 +55,7 @@ export async function getPnl(request: Request, response: Response, next: NextFun
   ]);
 
   const attendanceByEmployee = new Map<string, Map<string, string>>();
+  // Index once for the multi-period calculation instead of scanning all attendance per employee/date.
   for (const record of attendance) {
     const employeeId = String(record.employee);
     const byDate = attendanceByEmployee.get(employeeId) ?? new Map<string, string>();
@@ -105,11 +106,14 @@ export async function getPnl(request: Request, response: Response, next: NextFun
 
     const inputValues = pnlInputsByPeriod.get(period) ?? {};
     const enteredStaffSalary = inputValues[PNL_STAFF_SALARY_KEY] ?? 0;
+    // A positive entered salary overrides calculated payroll; zero keeps the calculated value.
     const payroll = enteredStaffSalary > 0 ? enteredStaffSalary : calculatedPayroll;
+    // Preserve the existing 95% revenue estimate only when no explicit net-sales value is stored.
     const netSales = inputValues.netSales ?? roundCurrency(revenue * 0.95);
     const costOfGoods = PNL_COST_OF_GOODS_KEYS.reduce((sum, key) => sum + (inputValues[key] ?? 0), 0);
     const grossProfit = netSales - costOfGoods;
     const rentExpenses = PNL_RENT_KEYS.reduce((sum, key) => sum + (inputValues[key] ?? 0), 0);
+    // These categories are already counted separately; exclude them here to avoid double-counting.
     const manualExpenses = PNL_EXPENSE_KEYS.reduce((sum, key) => sum + (
       key === PNL_STAFF_SALARY_KEY || PNL_COST_OF_GOODS_KEYS.includes(key as typeof PNL_COST_OF_GOODS_KEYS[number]) || PNL_RENT_KEYS.includes(key as typeof PNL_RENT_KEYS[number])
         ? 0

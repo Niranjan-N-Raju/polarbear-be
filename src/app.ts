@@ -46,6 +46,8 @@ app.get("/api/greet", (_request, response) => {
 });
 app.use("/api", vercelDatabase);
 app.use("/api/auth", authRouter);
+// Franchise handlers run first on shared paths (such as /users and /stores).
+// They call next() for other roles so the administrator routers can handle those requests.
 app.use("/api", franchiseDashboardRouter);
 app.use("/api", franchiseInventoryRouter);
 app.use("/api", franchiseWithdrawalsRouter);

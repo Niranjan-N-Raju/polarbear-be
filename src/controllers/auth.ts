@@ -59,6 +59,7 @@ export async function postLogin(request: Request, response: Response) {
       isActive: { $ne: false },
     })) as LoginUser | null;
 
+    // Unknown accounts still perform bcrypt work instead of returning before the costly comparison.
     const passwordMatches = await bcrypt.compare(
       password,
       typeof user?.password === "string" ? user.password : await dummyHash(),
@@ -133,6 +134,8 @@ export async function postExtend(request: Request, response: Response) {
 }
 
 export async function postLogout(request: Request, response: Response) {
+  // Revocation is account-wide: all previously issued tokens carry the old version.
+  // Await persistence before reporting success so a failed write cannot claim logout succeeded.
   await mongoose.connection.collection('users').updateOne(
     { _id: new mongoose.Types.ObjectId(request.auth!.id) },
     { $inc: { sessionVersion: 1 } },

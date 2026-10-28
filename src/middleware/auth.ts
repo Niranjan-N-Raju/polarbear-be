@@ -78,6 +78,8 @@ export async function requireAuth(
   }
 
   try {
+    // Signed claims alone cannot reveal an archive, role change, or logout since token issuance.
+    // Re-read the user and compare session versions on every authenticated request.
     const user = await User.findById(id)
       .select('_id name email role isActive sessionVersion mustChangePassword')
       .lean();

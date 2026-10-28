@@ -181,6 +181,7 @@ export async function patchUsersId(request: Request<{ id: string; }>, response: 
     target.franchises.length !== franchiseIds.length ||
     target.franchises.some((storeId) => !franchiseIds.includes(String(storeId)))
   );
+  // A role/assignment change revokes old tokens rather than letting them retain stale privileges.
   if ((role && role !== target.role) || assignmentsChanged) {
     target.sessionVersion = (target.sessionVersion ?? 0) + 1;
   }

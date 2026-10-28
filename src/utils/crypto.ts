@@ -43,6 +43,7 @@ export function isEncrypted(value: string): boolean {
 /** Encrypts plaintext and returns a prefixed base64url string. */
 export function encrypt(plaintext: string): string {
   const key = getKey();
+  // A fresh nonce makes repeated plaintext encrypt differently under the same key.
   const iv = randomBytes(12);
   const cipher = createCipheriv(ALGORITHM, key, iv);
   const ciphertext = Buffer.concat([
@@ -58,6 +59,7 @@ export function encrypt(plaintext: string): string {
 
 /** Decrypts a string produced by encrypt(). Returns plaintext as-is if not encrypted. */
 export function decrypt(stored: string): string {
+  // Legacy plaintext remains readable; malformed ciphertext must still fail rather than pass through.
   if (!isEncrypted(stored)) return stored;
   const key = getKey();
   const parts = stored.slice(ENCRYPTED_PREFIX.length).split(".");

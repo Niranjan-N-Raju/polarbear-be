@@ -23,6 +23,7 @@ export function resolveShift(day: RosterDay, shifts: Shift[]) {
   if (exact) return exact.id;
   const byTime = shifts.find((shift) => shift.startTime === day.startTime && shift.endTime === day.endTime);
   if (byTime) return byTime.id;
+  // Older rosters stored morning/night labels instead of configurable shift IDs.
   const label = day.shift?.toLowerCase();
   const legacyTimes = label === 'night' ? ['17:00', '02:00'] : label === 'morning' ? ['09:00', '18:00'] : null;
   return legacyTimes ? shifts.find((shift) => shift.startTime === legacyTimes[0] && shift.endTime === legacyTimes[1])?.id ?? 'off' : 'off';

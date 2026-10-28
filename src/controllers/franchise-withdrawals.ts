@@ -26,6 +26,7 @@ export async function getWithdrawals(request: Request, response: Response, next:
       .sort({ date: -1, createdAt: -1 })
       .limit(MAX_WITHDRAWAL_RESULTS)
       .lean(),
+    // All-time totals intentionally ignore the list's date filter and result limit.
     Withdrawal.aggregate<{ _id: string; total: number; }>([
       { $match: { franchise: storeId, type: { $in: ['withdrawal', 'repayment'] } } },
       { $group: { _id: '$type', total: { $sum: '$amount' } } },
@@ -61,6 +62,7 @@ export async function putWithdrawalsId(request: Request, response: Response, nex
   if (!storeId) return;
   const validation = validate(bodyRecord(request));
   if ('error' in validation) { response.status(400).json({ message: validation.error }); return; }
+  // Scope the mutation to the authorized store and retain the pre-update document for the audit.
   const previous = await Withdrawal.findOneAndUpdate(
     { _id: id, franchise: storeId },
     { $set: validation.value },

@@ -21,6 +21,7 @@ export async function getDashboardStores(userId: string) {
     : [];
 }
 
+// The router must authorize storeObjectId first; this query service does not enforce store access.
 export async function getFranchiseDashboard(storeObjectId: Types.ObjectId, userId: string) {
   const storeCount = (await getVisibleStoreIds(userId)).length;
   const now = new Date();
@@ -53,6 +54,7 @@ export async function getFranchiseDashboard(storeObjectId: Types.ObjectId, userI
     storeCount,
     employeeSummary,
     salesSummary: monthlySales[0]?.total ?? 0,
+    // Not calculated yet; do not infer attendance from employee headcount.
     attendanceSummary: 0,
     attritionTrend: computeMonthlyAttrition(employees),
     weekdayPerformance: computeWeekdayPerformance(sales),

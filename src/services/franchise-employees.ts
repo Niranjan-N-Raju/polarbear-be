@@ -29,6 +29,7 @@ export function documentSummary(value: unknown) {
   return { fileName, contentType, size };
 }
 export function safeUser<T extends Record<string, unknown>>(user: T): T {
+  // List/detail responses expose document metadata, never file bytes or internal auth fields.
   for (const field of INTERNAL_USER_FIELDS) delete user[field];
   for (const field of ['aadharDocument', 'panDocument'] as const) {
     if (user[field]) (user as Record<string, unknown>)[field] = documentSummary(user[field]);

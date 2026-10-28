@@ -77,6 +77,7 @@ export async function patch(request: Request, response: Response) {
       return;
     }
     user.password = await bcrypt.hash(newPassword, 12);
+    // Invalidate every existing session after a password change; the response issues a fresh token.
     user.sessionVersion = (user.sessionVersion ?? 0) + 1;
     user.mustChangePassword = false;
   }
@@ -86,6 +87,7 @@ export async function patch(request: Request, response: Response) {
   }
 
   await user.save();
+  // Audit changed field names, never the supplied password values.
   auditLog(newPassword !== undefined ? 'user.password.changed' : 'user.profile.updated', {
     actorId: auth.id,
     actorRole: auth.role,

@@ -6,6 +6,7 @@ import { User } from '../models/User.js';
 export function isDateValue(value: unknown): value is string {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00Z`);
+  // JavaScript normalizes impossible dates (for example February 30); round-trip to reject them.
   return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
@@ -44,6 +45,7 @@ export async function authorizeStore(
   userId: string,
   response: Response,
 ): Promise<mongoose.Types.ObjectId | null> {
+  // Null means the helper already sent an error response; callers must stop before querying/mutating.
   if (typeof storeId !== 'string' || !mongoose.isValidObjectId(storeId)) {
     response.status(400).json({ message: 'A valid storeId is required.' });
     return null;

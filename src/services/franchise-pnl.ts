@@ -13,6 +13,7 @@ export function periodForDate(dateStr: string, cycleType: PeriodType, startDay: 
   const date = new Date(`${dateStr}T00:00:00`);
   if (cycleType === 'calendar_month') return monthValue(date);
   const shifted = new Date(date);
+  // Match salary-cycle labels: a custom cycle is named for the month in which it ends.
   if (date.getDate() >= startDay) shifted.setMonth(shifted.getMonth() + 1);
   return monthValue(shifted);
 }

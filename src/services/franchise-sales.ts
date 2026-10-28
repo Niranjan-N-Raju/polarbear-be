@@ -31,6 +31,7 @@ export async function parseSaleRequest(request: Request, response: Response) {
   const storeObjectId = await authorizeStore(parsed.data.storeId, request.auth?.id ?? '', response);
   if (!storeObjectId) return null;
   const { storeId: _storeId, ...sale } = parsed.data;
+  // Derive cash on the server so a client cannot submit a value inconsistent with its payment split.
   const cash = sale.totalSale - sale.swiggy - sale.zomato - sale.upi;
   return { storeObjectId, values: withSaleTotals({ ...sale, cash }) };
 }

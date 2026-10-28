@@ -11,6 +11,7 @@ export function isValidPeriod(value: string) {
 export { localDateValue } from "./dateUtils.js";
 
 export function dateValue(year: number, monthIndex: number, day: number) {
+  // Clamp month-end dates rather than letting Date roll February's day 31 into March.
   const lastDay = new Date(year, monthIndex + 1, 0).getDate();
   const date = new Date(year, monthIndex, Math.min(day, lastDay));
   return localDateValue(date);
@@ -41,6 +42,7 @@ export function resolveCycleSettings(store: {
   salaryCycleStartDay?: number;
   salaryCycleEndDay?: number;
 }) {
+  // Older stores may have start/end days without an explicit cycle type.
   const cycleType =
     store.salaryCycleType ??
     (store.salaryCycleStartDay === 1 && store.salaryCycleEndDay === 31

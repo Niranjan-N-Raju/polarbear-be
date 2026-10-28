@@ -144,6 +144,7 @@ export async function postInventory(request: Request, response: Response, next: 
     response.status(404).json({ message: 'Choose a predefined product.' });
     return;
   }
+  // Stock batches are grouped by store, product, and expiry; repeat additions increment that batch.
   const item = await InventoryItem.findOneAndUpdate(
     { storeId, productId: product._id, expiryDate: body.expiryDate },
     {
@@ -197,6 +198,7 @@ export async function patchInventory(request: Request, response: Response, next:
       response.status(400).json({ message: `Use the earlier expiry ${earlier.expiryDate} first.` });
       return;
     }
+    // Guard quantity in the write itself; a prior read cannot prevent concurrent over-consumption.
     const updated = await InventoryItem.findOneAndUpdate(
       { _id: itemId, storeId, quantity: { $gte: quantity }, expiryDate: { $gte: today } },
       { $inc: { quantity: -quantity } },

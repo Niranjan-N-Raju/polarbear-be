@@ -42,6 +42,7 @@ export async function getSalary(request: Request, response: Response, next: Next
     const eligibleDates = cycleDates.filter((date) => isEmployeeActiveOn(employee, date));
     const elapsedDates = eligibleDates.filter((date) => date <= today);
     const futureDays = eligibleDates.filter((date) => date > today).length;
+    // Week Off is paid; missing elapsed attendance is tracked separately and is not assumed present.
     const paidDays = elapsedDates.filter((date) => records.get(date) === 'Present' || records.get(date) === 'Week Off').length;
     const absentDays = elapsedDates.filter((date) => records.get(date) === 'Absent').length;
     const weekOffDays = elapsedDates.filter((date) => records.get(date) === 'Week Off').length;
@@ -53,6 +54,8 @@ export async function getSalary(request: Request, response: Response, next: Next
     const extraDaysTotal = employeeExtraDays.reduce((sum, item) => sum + item.days, 0);
     const advanceTotal = employeeAdvances.reduce((sum, item) => sum + item.amount, 0);
     const salary = number(employee.salary);
+    // Prorate against the full cycle, not just employment-eligible dates.
+    // Projection adds future eligible days; earned pay only includes recorded paid days and adjustments.
     return { employeeId, name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', salary, paidDays, absentDays, weekOffDays, missingDays, futureDays, eligibleDays: eligibleDates.length, incentives: employeeIncentives, incentiveTotal, extraDays: employeeExtraDays, extraDaysTotal, advances: employeeAdvances, advanceTotal, earnedSalary: roundCurrency((salary * (paidDays + extraDaysTotal)) / cycleDates.length) + incentiveTotal - advanceTotal, projectedSalary: roundCurrency((salary * (paidDays + futureDays + extraDaysTotal)) / cycleDates.length) + incentiveTotal - advanceTotal };
   });
   response.json({ store: { id: id(store._id), name: store.name }, cycle: { configured: Boolean(store.salaryCycleConfiguredAt), type: cycleType, startDay, endDay, ...range, totalDays: cycleDates.length }, projections });
