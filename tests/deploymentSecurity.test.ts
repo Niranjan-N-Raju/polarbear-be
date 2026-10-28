@@ -62,7 +62,8 @@ describe('security headers', () => {
     process.env.NODE_ENV = 'development';
     process.env.VERCEL = '1';
     delete process.env.WEB_ORIGINS;
-    const response = await fetch(`${baseUrl}/api/does-not-exist`);
+    // A non-/api path avoids the Vercel database middleware, so no connection is attempted.
+    const response = await fetch(`${baseUrl}/does-not-exist`);
     assert.match(response.headers.get('strict-transport-security') ?? '', /max-age=31536000/);
     assert.deepEqual(allowedOrigins(), []);
   });
