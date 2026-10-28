@@ -31,9 +31,9 @@ export function loadConfig(): AppConfig {
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new ConfigurationError("PORT must be an integer between 1 and 65535.");
   }
-  if (process.env.NODE_ENV === "production") {
-    if (!/^[0-9a-fA-F]{64}$/.test(process.env.FIELD_ENCRYPTION_KEY ?? "")) {
-      throw new ConfigurationError("FIELD_ENCRYPTION_KEY (64 hex characters) is required in production.");
+  if (process.env.NODE_ENV === "production" && process.env.FIELD_ENCRYPTION_KEY) {
+    if (!/^[0-9a-fA-F]{64}$/.test(process.env.FIELD_ENCRYPTION_KEY)) {
+      throw new ConfigurationError("FIELD_ENCRYPTION_KEY must be 64 hex characters when configured.");
     }
   }
 

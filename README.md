@@ -39,11 +39,19 @@ Initialization failures return HTTP 503; `/api/health` reports
 `"database":"disconnected"`. Local `npm run dev` and `npm start` still require
 a successful database connection before listening.
 
-Set `MONGODB_URI`, `MONGODB_DB`, `JWT_SECRET` (at least 32 characters),
-`FIELD_ENCRYPTION_KEY` (64 hex characters) in Vercel's
+Set `MONGODB_URI`, `MONGODB_DB`, and `JWT_SECRET` (at least 32 characters) in Vercel's
 environment settings and redeploy. Use the existing encryption key for existing
 encrypted data. Ensure the MongoDB host permits connections from the deployment.
 Do not commit these secrets.
+
+`FIELD_ENCRYPTION_KEY` is optional. When unset or empty, sensitive identity/bank
+fields are stored as plaintext in both development and production. Production
+logs a warning without including field values. This disables application-level
+encryption for new field writes; avoid using real sensitive data in this mode.
+When configured, fields are encrypted as before. Encrypted document operations
+and reading existing encrypted data still require the original key; existing
+encrypted data is not converted to plaintext. If a key is supplied, production
+startup validates its 64-character hexadecimal format.
 
 If initialization returns 503, check Vercel runtime logs:
 `[database] Configuration invalid:` identifies the failed environment requirement
