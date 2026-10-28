@@ -4,7 +4,7 @@
  * Required env var: FIELD_ENCRYPTION_KEY — a 64-character hex string (32 bytes).
  * Generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
  *
- * If the key is absent, encryptField() stores plaintext in all environments.
+ * If the key is absent, encryptField() rejects sensitive writes in all environments.
  * encrypt()/decrypt() of encrypted values always require it.
  */
 
@@ -115,16 +115,13 @@ export function decryptUserFields<T extends Record<string, unknown>>(user: T): T
 /**
  * Encrypt a field value if FIELD_ENCRYPTION_KEY is configured.
  * Skips already-encrypted values (idempotent).
- * Without a key, preserves plaintext; production logs a warning without field values.
+ * Requires a key for new sensitive values in every environment.
  */
 export function encryptField(value: string | undefined): string | undefined {
   if (!value) return value;
   if (isEncrypted(value)) return value;
   if (!process.env.FIELD_ENCRYPTION_KEY) {
-    if (process.env.NODE_ENV === "production") {
-      console.warn("[encryption] FIELD_ENCRYPTION_KEY is absent; sensitive fields are being stored as plaintext.");
-    }
-    return value;
+    throw new Error("FIELD_ENCRYPTION_KEY is required to encrypt sensitive fields.");
   }
   return encrypt(value);
 }

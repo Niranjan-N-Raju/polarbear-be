@@ -44,14 +44,14 @@ environment settings and redeploy. Use the existing encryption key for existing
 encrypted data. Ensure the MongoDB host permits connections from the deployment.
 Do not commit these secrets.
 
-`FIELD_ENCRYPTION_KEY` is optional. When unset or empty, sensitive identity/bank
-fields are stored as plaintext in both development and production. Production
-logs a warning without including field values. This disables application-level
-encryption for new field writes; avoid using real sensitive data in this mode.
-When configured, fields are encrypted as before. Encrypted document operations
-and reading existing encrypted data still require the original key; existing
-encrypted data is not converted to plaintext. If a key is supplied, production
-startup validates its 64-character hexadecimal format.
+Set `FIELD_ENCRYPTION_KEY` to a 64-character hexadecimal key in the ignored local
+backend `.env` and Vercel environment settings. Use the same key when both
+environments access the same database. Production requires it at startup;
+sensitive field writes require it in every environment and never fall back to
+plaintext. Existing encrypted records require their original key.
+Existing plaintext records are not automatically encrypted: use the
+`migrate:encrypt-pii` command after reviewing its dry run and backing up the data.
+Keep a secure backup of the key; losing it prevents decryption.
 
 If initialization returns 503, check Vercel runtime logs:
 `[database] Configuration invalid:` identifies the failed environment requirement

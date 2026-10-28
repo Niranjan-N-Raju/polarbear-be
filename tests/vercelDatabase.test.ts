@@ -97,14 +97,10 @@ it("keeps the public greeting independent of MongoDB", async () => {
   assert.equal(connect.mock.callCount(), 0);
 });
 
-it("initializes production API requests without a browser allowlist or encryption key", async () => {
+it("initializes production API requests with encryption and without a browser allowlist", async () => {
   process.env.NODE_ENV = "production";
   process.env.WEB_ORIGINS = "";
-  process.env.FIELD_ENCRYPTION_KEY = "";
-  const warning = mock.method(console, "warn", () => {});
-  assert.equal(encryptField("sensitive-test-value"), "sensitive-test-value");
-  assert.equal(warning.mock.callCount(), 1);
-  assert.ok(!JSON.stringify(warning.mock.calls).includes("sensitive-test-value"));
+  process.env.FIELD_ENCRYPTION_KEY = "a".repeat(64);
   const connect = mock.method(mongoose, "connect", async () => { state = 1; return mongoose; });
   const response = await fetch(`${baseUrl}/health`);
   assert.equal(response.status, 200);
@@ -112,6 +108,14 @@ it("initializes production API requests without a browser allowlist or encryptio
   assert.equal(connect.mock.callCount(), 1);
   const browser = await fetch(`${baseUrl}/health`, { headers: { Origin: "https://unlisted.example.test" } });
   assert.equal(browser.headers.get("access-control-allow-origin"), null);
+});
+
+it("rejects unencrypted sensitive writes without a key in local and production environments", () => {
+  process.env.FIELD_ENCRYPTION_KEY = "";
+  for (const environment of ["development", "production"]) {
+    process.env.NODE_ENV = environment;
+    assert.throws(() => encryptField("sensitive-test-value"), /FIELD_ENCRYPTION_KEY/);
+  }
 });
 
 it("encrypts fields when a production key is configured and never treats ciphertext as plaintext", () => {
@@ -138,7 +142,7 @@ it("logs the exact configuration requirement without exposing values to clients 
   assert.deepEqual(await response.json(), { status: "unavailable", database: "disconnected" });
   assert.deepEqual(log.mock.calls[0].arguments, [
     "[database] Configuration invalid:",
-    "FIELD_ENCRYPTION_KEY must be 64 hex characters when configured.",
+    "FIELD_ENCRYPTION_KEY (64 hex characters) is required in production.",
   ]);
   assert.ok(!JSON.stringify(log.mock.calls).includes("invalid-private-value"));
   assert.equal(connect.mock.callCount(), 0);
