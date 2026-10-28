@@ -178,12 +178,16 @@ describe('configuration validation', () => {
     assert.equal(response.status, 401);
   });
 
-  it('requires WEB_ORIGINS and a valid FIELD_ENCRYPTION_KEY in production', () => {
+  it('allows native-only production configuration while requiring a valid FIELD_ENCRYPTION_KEY', () => {
     baseEnv();
     process.env.NODE_ENV = 'production';
     delete process.env.WEB_ORIGINS;
     process.env.FIELD_ENCRYPTION_KEY = 'a'.repeat(64);
-    assert.throws(() => loadConfig(), /WEB_ORIGINS/);
+    assert.equal(loadConfig().mongoDatabase, 'test');
+    assert.deepEqual(allowedOrigins(), []);
+    process.env.WEB_ORIGINS = '   ';
+    assert.equal(loadConfig().mongoDatabase, 'test');
+    assert.deepEqual(allowedOrigins(), []);
 
     process.env.WEB_ORIGINS = 'https://app.example.test';
     process.env.FIELD_ENCRYPTION_KEY = 'not-hex';

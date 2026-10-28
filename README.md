@@ -9,7 +9,7 @@ Use Node.js 20.17 or newer. Set these variables in a local `.env` file or in the
 - `MONGODB_URI`: MongoDB connection URI, including credentials when required.
 - `MONGODB_DB`: Database name. To use the existing application database, supply the same value as the current backend.
 - `JWT_SECRET`: long random secret used to sign login tokens. Keep it private and use the same value in any service that verifies these tokens.
-- `WEB_ORIGINS`: comma-separated browser origins allowed to call the API. Defaults to local Vite origins on ports `3000`-`3005` and `5173`.
+- `WEB_ORIGINS`: optional comma-separated browser origins allowed to call the API. Defaults to local Vite origins on ports `3000`-`3005` and `5173` in development; production allows no cross-origin browser clients unless configured. Native Android/iOS clients do not need this variable.
 - `PORT`: HTTP port, default `4000`.
 
 `.env.example` contains local development placeholders, not a production connection. `.env` files are ignored. Never put MongoDB credentials in the mobile app or commit them.
@@ -40,7 +40,7 @@ Initialization failures return HTTP 503; `/api/health` reports
 a successful database connection before listening.
 
 Set `MONGODB_URI`, `MONGODB_DB`, `JWT_SECRET` (at least 32 characters),
-`FIELD_ENCRYPTION_KEY` (64 hex characters), and `WEB_ORIGINS` in Vercel's
+`FIELD_ENCRYPTION_KEY` (64 hex characters) in Vercel's
 environment settings and redeploy. Use the existing encryption key for existing
 encrypted data. Ensure the MongoDB host permits connections from the deployment.
 Do not commit these secrets.
@@ -53,7 +53,8 @@ Raw database error messages and connection strings are not logged.
 
 For browser clients, `WEB_ORIGINS` must include the exact frontend origin
 (scheme, host, and port), for example `http://localhost:5173`, with multiple
-origins separated by commas. Native iOS/Android requests do not require CORS.
+origins separated by commas. Leave it unset or empty for a native-only deployment;
+native iOS/Android requests do not require CORS.
 CORS is already handled by the API; do not enable wildcard origins.
 
 ## Demo data

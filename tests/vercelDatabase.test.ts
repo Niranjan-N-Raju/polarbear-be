@@ -96,6 +96,19 @@ it("keeps the public greeting independent of MongoDB", async () => {
   assert.equal(connect.mock.callCount(), 0);
 });
 
+it("initializes production API requests without a browser origin allowlist", async () => {
+  process.env.NODE_ENV = "production";
+  process.env.WEB_ORIGINS = "";
+  process.env.FIELD_ENCRYPTION_KEY = "a".repeat(64);
+  const connect = mock.method(mongoose, "connect", async () => { state = 1; return mongoose; });
+  const response = await fetch(`${baseUrl}/health`);
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("access-control-allow-origin"), null);
+  assert.equal(connect.mock.callCount(), 1);
+  const browser = await fetch(`${baseUrl}/health`, { headers: { Origin: "https://unlisted.example.test" } });
+  assert.equal(browser.headers.get("access-control-allow-origin"), null);
+});
+
 it("logs the exact configuration requirement without exposing values to clients or logs", async () => {
   process.env.NODE_ENV = "production";
   process.env.WEB_ORIGINS = "https://frontend.example.test";
