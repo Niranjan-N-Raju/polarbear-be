@@ -79,3 +79,5 @@ const handleError: ErrorRequestHandler = (error, _request, response, _next) => {
 };
 
 app.use(handleError);
+
+export default app;

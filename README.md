@@ -27,6 +27,17 @@ npm start
 
 Run commands from this project's root. `npm test` runs the backend unit tests with Node's built-in test runner; tests do not require a database. `npm run dev` reloads TypeScript changes; `npm start` runs the compiled output after a build.
 
+### Vercel entry point
+
+`src/app.ts` exports the Express application as both a default export for
+Vercel and a named export for the local server. The default entry point serves
+`/api/greet` without starting a port listener or connecting to MongoDB.
+The database connection is currently initialized only by `src/server.ts`;
+exporting the app alone does not initialize database-backed routes on Vercel.
+Until a database connection is initialized, `/api/health` reports `503` with
+`"database":"disconnected"`. Local `npm run dev` and `npm start` still require
+a successful database connection before listening.
+
 ## Demo data
 
 `npm run seed:demo` previews 18 demo stores and 18 demo users without changing the database. To insert missing demo records into the configured MongoDB database, run:

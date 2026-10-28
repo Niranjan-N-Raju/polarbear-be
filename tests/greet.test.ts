@@ -2,10 +2,15 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import type { Server } from "node:http";
 import { after, before, it } from "node:test";
-import { app } from "../src/app.js";
+import app, { app as namedApp } from "../src/app.js";
 
 let server: Server;
 let baseUrl: string;
+
+it("exports the Express handler as the default Vercel entry point", () => {
+  assert.equal(typeof app, "function");
+  assert.equal(app, namedApp);
+});
 
 before(async () => {
   server = app.listen(0, "127.0.0.1");
