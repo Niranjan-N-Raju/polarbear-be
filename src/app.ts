@@ -17,6 +17,7 @@ import { profileRouter } from "./routes/profile.js";
 import { rejectDangerousKeys } from "./middleware/rejectDangerousKeys.js";
 import { cors, securityHeaders } from "./middleware/securityHeaders.js";
 import { byIp, rateLimitMiddleware, rateLimits } from "./utils/rateLimit.js";
+import { vercelDatabase } from "./middleware/vercelDatabase.js";
 
 const UPLOAD_PATHS = ["/api/users/:id/documents/:documentType", "/api/stores/logo"];
 
@@ -43,6 +44,7 @@ app.use(rejectDangerousKeys);
 app.get("/api/greet", (_request, response) => {
   response.json({ message: "Hello! Welcome to Vajan PB." });
 });
+app.use("/api", vercelDatabase);
 app.use("/api/auth", authRouter);
 app.use("/api", franchiseDashboardRouter);
 app.use("/api", franchiseInventoryRouter);

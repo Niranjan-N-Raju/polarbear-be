@@ -32,11 +32,23 @@ Run commands from this project's root. `npm test` runs the backend unit tests wi
 `src/app.ts` exports the Express application as both a default export for
 Vercel and a named export for the local server. The default entry point serves
 `/api/greet` without starting a port listener or connecting to MongoDB.
-The database connection is currently initialized only by `src/server.ts`;
-exporting the app alone does not initialize database-backed routes on Vercel.
-Until a database connection is initialized, `/api/health` reports `503` with
+On Vercel (`VERCEL=1`), API requests other than `/api/greet` initialize MongoDB
+before routing. Concurrent requests share the connection attempt; warm requests
+reuse the connection, and failed attempts can be retried on later requests.
+Initialization failures return HTTP 503; `/api/health` reports
 `"database":"disconnected"`. Local `npm run dev` and `npm start` still require
 a successful database connection before listening.
+
+Set `MONGODB_URI`, `MONGODB_DB`, `JWT_SECRET` (at least 32 characters),
+`FIELD_ENCRYPTION_KEY` (64 hex characters), and `WEB_ORIGINS` in Vercel's
+environment settings and redeploy. Use the existing encryption key for existing
+encrypted data. Ensure the MongoDB host permits connections from the deployment.
+Do not commit these secrets.
+
+For browser clients, `WEB_ORIGINS` must include the exact frontend origin
+(scheme, host, and port), for example `http://localhost:5173`, with multiple
+origins separated by commas. Native iOS/Android requests do not require CORS.
+CORS is already handled by the API; do not enable wildcard origins.
 
 ## Demo data
 
