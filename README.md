@@ -45,6 +45,12 @@ environment settings and redeploy. Use the existing encryption key for existing
 encrypted data. Ensure the MongoDB host permits connections from the deployment.
 Do not commit these secrets.
 
+If initialization returns 503, check Vercel runtime logs:
+`[database] Configuration invalid:` identifies the failed environment requirement
+without showing its value. `[database] connection failed.` means configuration
+validation passed; check MongoDB credentials, network access, DNS, and TLS.
+Raw database error messages and connection strings are not logged.
+
 For browser clients, `WEB_ORIGINS` must include the exact frontend origin
 (scheme, host, and port), for example `http://localhost:5173`, with multiple
 origins separated by commas. Native iOS/Android requests do not require CORS.

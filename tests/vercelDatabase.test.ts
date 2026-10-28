@@ -7,7 +7,7 @@ import { app } from "../src/app.js";
 import { connectToDatabase } from "../src/config/database.js";
 import type { AppConfig } from "../src/config/env.js";
 
-const keys = ["VERCEL", "NODE_ENV", "MONGODB_URI", "MONGODB_DB", "JWT_SECRET"] as const;
+const keys = ["VERCEL", "NODE_ENV", "MONGODB_URI", "MONGODB_DB", "JWT_SECRET", "WEB_ORIGINS", "FIELD_ENCRYPTION_KEY", "PORT"] as const;
 const savedEnv = Object.fromEntries(keys.map(key => [key, process.env[key]]));
 const readyStateDescriptor = Object.getOwnPropertyDescriptor(mongoose.connection, "readyState");
 const config: AppConfig = {
@@ -36,6 +36,7 @@ beforeEach(() => {
   process.env.MONGODB_URI = config.mongoUri;
   process.env.MONGODB_DB = config.mongoDatabase;
   process.env.JWT_SECRET = config.jwtSecret;
+  process.env.PORT = "4000";
 });
 
 afterEach(() => mock.restoreAll());
@@ -92,6 +93,23 @@ it("reports failures without leaking details and retries on the next request", a
 it("keeps the public greeting independent of MongoDB", async () => {
   const connect = mock.method(mongoose, "connect", async () => { throw new Error("must not connect"); });
   assert.equal((await fetch(`${baseUrl}/greet`)).status, 200);
+  assert.equal(connect.mock.callCount(), 0);
+});
+
+it("logs the exact configuration requirement without exposing values to clients or logs", async () => {
+  process.env.NODE_ENV = "production";
+  process.env.WEB_ORIGINS = "https://frontend.example.test";
+  process.env.FIELD_ENCRYPTION_KEY = "invalid-private-value";
+  const log = mock.method(console, "error", () => {});
+  const connect = mock.method(mongoose, "connect", async () => mongoose);
+  const response = await fetch(`${baseUrl}/health`);
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { status: "unavailable", database: "disconnected" });
+  assert.deepEqual(log.mock.calls[0].arguments, [
+    "[database] Configuration invalid:",
+    "FIELD_ENCRYPTION_KEY (64 hex characters) is required in production.",
+  ]);
+  assert.ok(!JSON.stringify(log.mock.calls).includes("invalid-private-value"));
   assert.equal(connect.mock.callCount(), 0);
 });
 
