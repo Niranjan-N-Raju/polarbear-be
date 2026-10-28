@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { createEntry,deleteEntry,listEntry,updateEntry } from '../controllers/franchise-salary.js';
+import { createEntry, deleteEntry, listEntry, updateEntry } from '../controllers/franchise-salary.js';
 import { requireAuth } from '../middleware/auth.js';
-import { byUser,rateLimitMiddleware,rateLimits } from '../utils/rateLimit.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
 
-import { getSalary,getSalarySlip,putSalary } from '../controllers/franchise-salary.js';
+import { getSalary, getSalarySlip, putSalary } from '../controllers/franchise-salary.js';
 export const franchiseSalaryRouter = Router();
 const router = franchiseSalaryRouter;
 const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.expensiveRead, byUser);

@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { deleteProducts,getInventory,getProducts,patchInventory,patchProducts,postInventory,postProducts } from '../controllers/franchise-inventory.js';
-import { requireAuth,requireRole } from '../middleware/auth.js';
-import { byUser,rateLimitMiddleware,rateLimits } from '../utils/rateLimit.js';
+import { deleteProducts, getInventory, getProducts, patchInventory, patchProducts, postInventory, postProducts } from '../controllers/franchise-inventory.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
 export { MAX_PRODUCTS_PER_REQUEST } from '../services/franchise-inventory.js';
 export const franchiseInventoryRouter = Router();
 const router = franchiseInventoryRouter;

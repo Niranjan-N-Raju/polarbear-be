@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { requireAuth,requireRole } from '../middleware/auth.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
-import { deleteUsersId,getUsers,getUsersId,patchUsersId,postUsers } from '../controllers/admin-users.js';
+import { deleteUsersId, getUsers, getUsersId, patchUsersId, postUsers } from '../controllers/admin-users.js';
 export const adminUsersRouter = Router();
 
 adminUsersRouter.use('/users', requireAuth, requireRole('admin'));

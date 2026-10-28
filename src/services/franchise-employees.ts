@@ -1,13 +1,13 @@
-import { type Request,type Response } from 'express';
+import { type Request, type Response } from 'express';
 import mongoose from 'mongoose';
-import { User,type UserDocumentFile,type UserRecord } from '../models/User.js';
+import { User, type UserDocumentFile, type UserRecord } from '../models/User.js';
 import { decryptUserFields } from '../utils/crypto.js';
-import { bodyRecord,stringQuery } from '../utils/franchiseRoute.js';
-import { authorizeStore,isDateValue } from '../utils/storeAccess.js';
+import { bodyRecord, stringQuery } from '../utils/franchiseRoute.js';
+import { authorizeStore, isDateValue } from '../utils/storeAccess.js';
 export const MAX_FILE_SIZE = 5 * 1024 * 1024;
 export const documentFields = { aadhar: 'aadharDocument', pan: 'panDocument' } as const;
 export type DocumentType = keyof typeof documentFields;
-export type UserWithDocuments = mongoose.HydratedDocument<UserRecord> & { aadharDocument?: UserDocumentFile; panDocument?: UserDocumentFile };
+export type UserWithDocuments = mongoose.HydratedDocument<UserRecord> & { aadharDocument?: UserDocumentFile; panDocument?: UserDocumentFile; };
 export function pageValue(value: unknown, fallback: number) {
   const parsed = Number.parseInt(String(value ?? fallback), 10);
   return Number.isFinite(parsed) ? Math.max(1, parsed) : fallback;
@@ -55,7 +55,7 @@ export async function targetForStore(id: string, storeId: mongoose.Types.ObjectI
   const user = await User.findOne({ _id: id, role: 'employee', franchises: storeId });
   return user;
 }
-export function parseEmployee(body: Record<string, unknown>, requireName = true): { value?: Record<string, unknown>; error?: string } {
+export function parseEmployee(body: Record<string, unknown>, requireName = true): { value?: Record<string, unknown>; error?: string; } {
   if (requireName && (typeof body.name !== 'string' || !body.name.trim())) return { error: 'Name is required.' };
   if (typeof body.name === 'string' && body.name.trim().length === 0) return { error: 'Name is required.' };
   if (typeof body.name === 'string' && body.name.trim().length > 100) return { error: 'Name must be 100 characters or fewer.' };

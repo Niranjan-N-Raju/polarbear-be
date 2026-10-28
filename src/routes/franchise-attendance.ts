@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import { byUser,rateLimitMiddleware,rateLimits } from '../utils/rateLimit.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
 
-import { deleteAttendance,getAttendance,getAttendanceWeeklyRoster,putAttendance,putAttendanceWeeklyRoster } from '../controllers/franchise-attendance.js';
+import { deleteAttendance, getAttendance, getAttendanceWeeklyRoster, putAttendance, putAttendanceWeeklyRoster } from '../controllers/franchise-attendance.js';
 export const franchiseAttendanceRouter = Router();
 const router = franchiseAttendanceRouter;
 const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.expensiveRead, byUser);

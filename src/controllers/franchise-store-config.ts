@@ -1,13 +1,13 @@
-import type { NextFunction,Request,Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Franchise } from '../models/Franchise.js';
 import { User } from '../models/User.js';
 import { WeeklyRoster } from '../models/WeeklyRoster.js';
-import { ALLOWED_LOGO_TYPES,getStoreId,MAX_LOGO_SIZE,SHIFT_ID_PATTERN,TIME_PATTERN } from '../services/franchise-store-config.js';
+import { ALLOWED_LOGO_TYPES, getStoreId, MAX_LOGO_SIZE, SHIFT_ID_PATTERN, TIME_PATTERN } from '../services/franchise-store-config.js';
 import { DEFAULT_POSITION_OPTIONS } from '../utils/employeePositions.js';
-import { decodeBase64Upload,detectAllowedUploadType,getBucket } from '../utils/fileUpload.js';
-import { bodyRecord,isFranchiseAdmin } from '../utils/franchiseRoute.js';
-import { getCycleRange,isValidPeriod,resolveCycleSettings } from '../utils/salaryCycle.js';
+import { decodeBase64Upload, detectAllowedUploadType, getBucket } from '../utils/fileUpload.js';
+import { bodyRecord, isFranchiseAdmin } from '../utils/franchiseRoute.js';
+import { getCycleRange, isValidPeriod, resolveCycleSettings } from '../utils/salaryCycle.js';
 export async function getStoresBranding(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await getStoreId(request, response);
@@ -119,12 +119,14 @@ export async function putStoresCycle(request: Request, response: Response, next:
   }
   const storeId = await getStoreId(request, response);
   if (!storeId) return;
-  const saved = await Franchise.findOneAndUpdate({ _id: storeId }, { $set: {
-    salaryCycleType: cycleType,
-    salaryCycleStartDay: startDay,
-    salaryCycleEndDay: cycleType === 'calendar_month' ? 31 : Number(startDay) - 1,
-    salaryCycleConfiguredAt: new Date(),
-  } }, { new: true, runValidators: true }).lean();
+  const saved = await Franchise.findOneAndUpdate({ _id: storeId }, {
+    $set: {
+      salaryCycleType: cycleType,
+      salaryCycleStartDay: startDay,
+      salaryCycleEndDay: cycleType === 'calendar_month' ? 31 : Number(startDay) - 1,
+      salaryCycleConfiguredAt: new Date(),
+    }
+  }, { new: true, runValidators: true }).lean();
   if (!saved) { response.status(404).json({ message: 'Store not found.' }); return; }
   response.json({ message: 'Salary cycle updated.', cycle: { startDay: saved.salaryCycleStartDay, endDay: saved.salaryCycleEndDay } });
 }

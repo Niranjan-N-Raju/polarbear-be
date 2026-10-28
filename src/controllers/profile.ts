@@ -1,10 +1,10 @@
 import bcrypt from 'bcryptjs';
-import type { Request,Response } from 'express';
+import type { Request, Response } from 'express';
 import { User } from '../models/User.js';
 import { auditLog } from '../utils/audit.js';
-import { checkRateLimit,rateLimits } from '../utils/rateLimit.js';
+import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
 import { signSessionToken } from '../utils/token.js';
-import { firstValidationMessage,passwordSchema,profileSchema } from '../utils/validation.js';
+import { firstValidationMessage, passwordSchema, profileSchema } from '../utils/validation.js';
 
 export async function get(request: Request, response: Response) {
   const user = await User.findById(request.auth!.id).select('_id name email role mustChangePassword preferredLanguage').lean();

@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { requireAuth,requireRole } from '../middleware/auth.js';
+import { requireAuth, requireRole } from '../middleware/auth.js';
 
-import { getStores,patchStores,patchStoresArchive,postStores } from '../controllers/admin-stores.js';
+import { getStores, patchStores, patchStoresArchive, postStores } from '../controllers/admin-stores.js';
 export const adminStoresRouter = Router();
 
 adminStoresRouter.use('/stores', requireAuth, requireRole('admin'));

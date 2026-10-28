@@ -3,7 +3,7 @@ export type AdminUserSource = {
   _id: unknown; name?: string; email?: string; phone?: string; position?: string; employmentType?: string;
   salary?: number; role?: string; isActive?: boolean; actualDob?: Date; dateOfJoining?: Date; archivedAt?: Date; createdAt?: Date;
 };
-export function adminUserView(user: AdminUserSource, franchises: Array<{ _id: string; name: string }>) {
+export function adminUserView(user: AdminUserSource, franchises: Array<{ _id: string; name: string; }>) {
   return {
     _id: String(user._id), name: user.name, email: user.email, phone: user.phone, position: user.position,
     employmentType: user.employmentType, salary: user.salary, role: user.role, isActive: user.isActive !== false,

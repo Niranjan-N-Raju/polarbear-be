@@ -1,21 +1,21 @@
 import bcrypt from 'bcryptjs';
-import type { Request,Response } from 'express';
+import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { randomBytes } from 'node:crypto';
 import { Franchise } from '../models/Franchise.js';
 import { User } from '../models/User.js';
-import { ADMIN_USER_PROJECTION,adminUserView,pageValue } from '../services/admin-users.js';
-import { clampPage,escapeRegex,isSearchTooLong,SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
+import { ADMIN_USER_PROJECTION, adminUserView, pageValue } from '../services/admin-users.js';
+import { clampPage, escapeRegex, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
 
 import { auditLog } from '../utils/audit.js';
-import { checkRateLimit,rateLimits } from '../utils/rateLimit.js';
+import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
 import { bodyTooLarge } from '../utils/requestBody.js';
-import { createUserSchema,firstValidationMessage,passwordSchema,patchUserSchema } from '../utils/validation.js';
+import { createUserSchema, firstValidationMessage, passwordSchema, patchUserSchema } from '../utils/validation.js';
 export async function getUsers(request: Request, response: Response) {
   await userListResponse(request, response);
 }
 
-export async function getUsersId(request: Request<{ id: string }>, response: Response) {
+export async function getUsersId(request: Request<{ id: string; }>, response: Response) {
   await userListResponse(request, response, request.params.id);
 }
 
@@ -117,7 +117,7 @@ export async function postUsers(request: Request, response: Response) {
   });
 }
 
-export async function patchUsersId(request: Request<{ id: string }>, response: Response) {
+export async function patchUsersId(request: Request<{ id: string; }>, response: Response) {
   const id = request.params.id;
   if (!mongoose.isValidObjectId(id)) {
     response.status(404).json({ message: 'User not found.' });
@@ -208,7 +208,7 @@ export async function patchUsersId(request: Request<{ id: string }>, response: R
   });
 }
 
-export async function deleteUsersId(request: Request<{ id: string }>, response: Response) {
+export async function deleteUsersId(request: Request<{ id: string; }>, response: Response) {
   const id = request.params.id;
   const auth = request.auth!;
   if (!mongoose.isValidObjectId(id)) {

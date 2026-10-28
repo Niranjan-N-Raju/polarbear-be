@@ -27,7 +27,27 @@ npm start
 
 Run commands from this project's root. `npm test` runs the backend unit tests with Node's built-in test runner; tests do not require a database. `npm run dev` reloads TypeScript changes; `npm start` runs the compiled output after a build.
 
-### Dashboard module boundaries
+### Route, controller, and feature module boundaries
+
+- `src/routes/` declares HTTP paths, middleware, authentication/role gates, and
+  rate-limit placement. Preserve middleware order and franchise-to-admin
+  `next()` fallthrough when extending shared paths.
+- `src/controllers/` owns request parsing, HTTP responses, mutations, audit
+  calls, and feature orchestration for authentication, Profile, Stores, Users,
+  Sales, Employees, Attendance, Inventory, Salary, P&L, Withdrawals, and Store
+  Config. Salary entry CRUD shares parameterized controller handlers; its
+  route-registration loop stays in the router.
+- `src/services/` contains feature queries, validation, serialization, and
+  supporting domain functions. Helpers that depend on Express requests retain
+  that explicit dependency; they are not authorization-free query APIs.
+- `src/utils/listQuery.ts` shares literal-search escaping and pagination bounds.
+  `requestBody.ts` shares byte-size checks with explicit per-feature limits
+  (10 KB for stores, 50 KB for users). Inventory reuses existing store-access
+  and local-date utilities rather than duplicating them.
+- Existing exported route constants remain available from their original route
+  modules for compatibility.
+
+#### Dashboard queries
 
 - `src/routes/franchise-dashboard.ts` handles dashboard/store HTTP routing and
   authorization, composing the separate `franchise-sales.ts` router for existing

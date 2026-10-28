@@ -1,7 +1,7 @@
-import type { Request,Response } from 'express';
+import type { Request, Response } from 'express';
 import { withSaleTotals } from '../utils/saleTotals.js';
-import { authorizeStore,isDateValue } from '../utils/storeAccess.js';
-import { firstValidationMessage,saleBodySchema } from '../utils/validation.js';
+import { authorizeStore, isDateValue } from '../utils/storeAccess.js';
+import { firstValidationMessage, saleBodySchema } from '../utils/validation.js';
 export function dateRange(request: Request, response: Response) {
   const from = request.query.from;
   const to = request.query.to;
@@ -16,7 +16,7 @@ export function dateRange(request: Request, response: Response) {
   return { from, to };
 }
 export function isDuplicateKeyError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && (error as { code?: unknown }).code === 11000;
+  return typeof error === 'object' && error !== null && (error as { code?: unknown; }).code === 11000;
 }
 export function saleAuditSnapshot(sale: Record<string, unknown>) {
   const { date, totalSale, swiggy, zomato, upi, upiCharge, cash, expenses, totalExpenses, bankingCash } = sale;

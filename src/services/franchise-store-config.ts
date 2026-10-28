@@ -1,4 +1,4 @@
-import type { Request,Response } from 'express';
+import type { Request, Response } from 'express';
 import { bodyRecord } from '../utils/franchiseRoute.js';
 import { authorizeStore } from '../utils/storeAccess.js';
 export const MAX_LOGO_SIZE = 2 * 1024 * 1024;

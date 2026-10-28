@@ -1,9 +1,9 @@
 import { type AttendanceRecord } from '../models/Attendance.js';
-import { datesBetween,isValidDate,localDateValue } from '../utils/dateUtils.js';
+import { datesBetween, isValidDate, localDateValue } from '../utils/dateUtils.js';
 export const STATUSES = new Set<AttendanceRecord['status']>(['Present', 'Week Off', 'Absent']);
 export const MAX_ENTRIES = 500;
-export type Shift = { id: string; name: string; startTime: string; endTime: string };
-export type RosterDay = { date: string; shift?: string; status?: string; startTime?: string; endTime?: string };
+export type Shift = { id: string; name: string; startTime: string; endTime: string; };
+export type RosterDay = { date: string; shift?: string; status?: string; startTime?: string; endTime?: string; };
 export function validMonday(value: string) {
   return isValidDate(value) && new Date(`${value}T00:00:00`).getDay() === 1;
 }
@@ -27,7 +27,7 @@ export function resolveShift(day: RosterDay, shifts: Shift[]) {
   const legacyTimes = label === 'night' ? ['17:00', '02:00'] : label === 'morning' ? ['09:00', '18:00'] : null;
   return legacyTimes ? shifts.find((shift) => shift.startTime === legacyTimes[0] && shift.endTime === legacyTimes[1])?.id ?? 'off' : 'off';
 }
-export function serializeRoster(roster: { weekStart: string; entries: Array<{ employee: unknown; days: RosterDay[] }> }, shifts: Shift[]) {
+export function serializeRoster(roster: { weekStart: string; entries: Array<{ employee: unknown; days: RosterDay[]; }>; }, shifts: Shift[]) {
   return {
     weekStart: roster.weekStart,
     entries: roster.entries.map((entry) => ({

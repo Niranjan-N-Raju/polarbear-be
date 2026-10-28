@@ -1,10 +1,10 @@
-import type { NextFunction,Request,Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Withdrawal } from '../models/Withdrawal.js';
-import { MAX_WITHDRAWAL_RESULTS,serialize,validate } from '../services/franchise-withdrawals.js';
+import { MAX_WITHDRAWAL_RESULTS, serialize, validate } from '../services/franchise-withdrawals.js';
 import { auditMutation } from '../utils/businessLimits.js';
 import { exceedsMaxRange } from '../utils/dateUtils.js';
-import { bodyRecord,isFranchiseAdmin,requireStore,stringQuery } from '../utils/franchiseRoute.js';
+import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { isDateValue } from '../utils/storeAccess.js';
 export async function getWithdrawals(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
@@ -26,7 +26,7 @@ export async function getWithdrawals(request: Request, response: Response, next:
       .sort({ date: -1, createdAt: -1 })
       .limit(MAX_WITHDRAWAL_RESULTS)
       .lean(),
-    Withdrawal.aggregate<{ _id: string; total: number }>([
+    Withdrawal.aggregate<{ _id: string; total: number; }>([
       { $match: { franchise: storeId, type: { $in: ['withdrawal', 'repayment'] } } },
       { $group: { _id: '$type', total: { $sum: '$amount' } } },
     ]),

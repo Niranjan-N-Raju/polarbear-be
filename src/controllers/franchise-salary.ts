@@ -1,4 +1,4 @@
-import type { NextFunction,Request,Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Advance } from '../models/Advance.js';
 import { Attendance } from '../models/Attendance.js';
@@ -6,13 +6,13 @@ import { ExtraDay } from '../models/ExtraDay.js';
 import { Franchise } from '../models/Franchise.js';
 import { Incentive } from '../models/Incentive.js';
 import { User } from '../models/User.js';
-import { collections,EntryKind,groupByEmployee,id,labels,number,serializeEntry,validateEntry } from '../services/franchise-salary.js';
+import { collections, EntryKind, groupByEmployee, id, labels, number, serializeEntry, validateEntry } from '../services/franchise-salary.js';
 import { auditMutation } from '../utils/businessLimits.js';
 import { decryptUserFields } from '../utils/crypto.js';
-import { datesBetween,localDateValue } from '../utils/dateUtils.js';
+import { datesBetween, localDateValue } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
-import { bodyRecord,isFranchiseAdmin,isPeriodValue,requireStore,stringQuery } from '../utils/franchiseRoute.js';
-import { getCycleRange,resolveCycleSettings,roundCurrency } from '../utils/salaryCycle.js';
+import { bodyRecord, isFranchiseAdmin, isPeriodValue, requireStore, stringQuery } from '../utils/franchiseRoute.js';
+import { getCycleRange, resolveCycleSettings, roundCurrency } from '../utils/salaryCycle.js';
 export async function getSalary(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const period = stringQuery(request, 'period');

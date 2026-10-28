@@ -2,13 +2,13 @@ import mongoose from 'mongoose';
 import { Advance } from '../models/Advance.js';
 import { ExtraDay } from '../models/ExtraDay.js';
 import { Incentive } from '../models/Incentive.js';
-import { isMoneyAmount,MAX_EXTRA_DAYS } from '../utils/businessLimits.js';
+import { isMoneyAmount, MAX_EXTRA_DAYS } from '../utils/businessLimits.js';
 export type EntryKind = 'advance' | 'incentive' | 'extraDay';
 export const collections: Record<EntryKind, mongoose.Model<any>> = { advance: Advance, incentive: Incentive, extraDay: ExtraDay };
 export const labels = { advance: 'Advance', incentive: 'Incentive', extraDay: 'Extra days' } as const;
 export function id(value: unknown) { return value == null ? '' : String(value); }
 export function number(value: unknown) { return typeof value === 'number' && Number.isFinite(value) ? value : 0; }
-export function groupByEmployee<T extends { employee: unknown }>(items: T[]) {
+export function groupByEmployee<T extends { employee: unknown; }>(items: T[]) {
   const map = new Map<string, T[]>();
   for (const item of items) {
     const key = id(item.employee);
@@ -16,7 +16,7 @@ export function groupByEmployee<T extends { employee: unknown }>(items: T[]) {
   }
   return map;
 }
-export function validateEntry(body: Record<string, unknown>, kind: EntryKind): { error: string; value?: never } | { value: Record<string, unknown>; error?: never } {
+export function validateEntry(body: Record<string, unknown>, kind: EntryKind): { error: string; value?: never; } | { value: Record<string, unknown>; error?: never; } {
   const type = typeof body.type === 'string' ? body.type.trim() : '';
   if (!type || type.length > 100) return { error: `Enter a ${kind === 'advance' ? 'reason for the advance' : kind === 'incentive' ? 'incentive type' : 'reason for the extra days'}.` } as const;
   const value = kind === 'extraDay' ? body.days : body.amount;

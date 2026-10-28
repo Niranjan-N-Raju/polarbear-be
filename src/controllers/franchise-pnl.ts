@@ -1,4 +1,4 @@
-import type { NextFunction,Request,Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Advance } from '../models/Advance.js';
 import { Attendance } from '../models/Attendance.js';
@@ -8,13 +8,13 @@ import { Incentive } from '../models/Incentive.js';
 import { PnlInput } from '../models/PnlInput.js';
 import { Sale } from '../models/Sale.js';
 import { User } from '../models/User.js';
-import { ALLOWED_INPUT_KEYS,FIELD_KEY_PATTERN,MAX_FIELDS,MAX_MONTHS,MAX_PERIOD_WALK,ValueMap,finiteNonNegative,nextPeriod,periodForDate,toPlainValues } from '../services/franchise-pnl.js';
+import { ALLOWED_INPUT_KEYS, FIELD_KEY_PATTERN, MAX_FIELDS, MAX_MONTHS, MAX_PERIOD_WALK, ValueMap, finiteNonNegative, nextPeriod, periodForDate, toPlainValues } from '../services/franchise-pnl.js';
 import { auditMutation } from '../utils/businessLimits.js';
-import { datesBetween,localDateValue } from '../utils/dateUtils.js';
+import { datesBetween, localDateValue } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
-import { bodyRecord,isFranchiseAdmin,isPeriodValue,requireStore,stringQuery } from '../utils/franchiseRoute.js';
-import { PNL_COST_OF_GOODS_KEYS,PNL_EXPENSE_KEYS,PNL_RENT_KEYS,PNL_STAFF_SALARY_KEY } from '../utils/pnlExpenses.js';
-import { getCycleRange,resolveCycleSettings,roundCurrency } from '../utils/salaryCycle.js';
+import { bodyRecord, isFranchiseAdmin, isPeriodValue, requireStore, stringQuery } from '../utils/franchiseRoute.js';
+import { PNL_COST_OF_GOODS_KEYS, PNL_EXPENSE_KEYS, PNL_RENT_KEYS, PNL_STAFF_SALARY_KEY } from '../utils/pnlExpenses.js';
+import { getCycleRange, resolveCycleSettings, roundCurrency } from '../utils/salaryCycle.js';
 export async function getPnl(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await requireStore(request, response);
@@ -62,7 +62,7 @@ export async function getPnl(request: Request, response: Response, next: NextFun
     attendanceByEmployee.set(employeeId, byDate);
   }
   const sumByEmployeePeriod = (
-    rows: Array<{ employee: mongoose.Types.ObjectId; period: string; amount?: number; days?: number }>,
+    rows: Array<{ employee: mongoose.Types.ObjectId; period: string; amount?: number; days?: number; }>,
     field: 'amount' | 'days',
   ) => {
     const totals = new Map<string, number>();

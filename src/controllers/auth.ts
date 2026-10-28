@@ -1,16 +1,16 @@
 import bcrypt from "bcryptjs";
-import type { Request,Response } from "express";
+import type { Request, Response } from "express";
 import mongoose from "mongoose";
-import { LOGIN_RATE_MESSAGE,LoginUser,dummyHash } from '../services/auth.js';
+import { LOGIN_RATE_MESSAGE, LoginUser, dummyHash } from '../services/auth.js';
 import {
-checkRateLimit,
-peekRateLimit,
-rateLimits,
-recordRateLimitFailure,
-resetRateLimit,
-sendRateLimited
+  checkRateLimit,
+  peekRateLimit,
+  rateLimits,
+  recordRateLimitFailure,
+  resetRateLimit,
+  sendRateLimited
 } from "../utils/rateLimit.js";
-import { SESSION_ABSOLUTE_MAX_SECONDS,signSessionToken } from "../utils/token.js";
+import { SESSION_ABSOLUTE_MAX_SECONDS, signSessionToken } from "../utils/token.js";
 export async function postLogin(request: Request, response: Response) {
   // request.ip honours only the configured TRUST_PROXY hop count, so X-Forwarded-For cannot be spoofed.
   const ip = request.ip || request.socket.remoteAddress || "unknown";

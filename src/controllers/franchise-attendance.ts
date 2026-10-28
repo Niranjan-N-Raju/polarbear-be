@@ -1,15 +1,15 @@
-import type { NextFunction,Request,Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
-import { Attendance,type AttendanceRecord } from '../models/Attendance.js';
+import { Attendance, type AttendanceRecord } from '../models/Attendance.js';
 import { Franchise } from '../models/Franchise.js';
 import { User } from '../models/User.js';
 import { WeeklyRoster } from '../models/WeeklyRoster.js';
-import { MAX_ENTRIES,mondayOnOrBefore,serializeRoster,Shift,STATUSES,validMonday,weekDates } from '../services/franchise-attendance.js';
+import { MAX_ENTRIES, mondayOnOrBefore, serializeRoster, Shift, STATUSES, validMonday, weekDates } from '../services/franchise-attendance.js';
 import { auditMutation } from '../utils/businessLimits.js';
-import { exceedsMaxRange,localDateValue,MAX_RANGE_DAYS } from '../utils/dateUtils.js';
+import { exceedsMaxRange, localDateValue, MAX_RANGE_DAYS } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
-import { bodyRecord,isFranchiseAdmin,requireStore,stringQuery } from '../utils/franchiseRoute.js';
-import { isArchivedStore,isDateValue } from '../utils/storeAccess.js';
+import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
+import { isArchivedStore, isDateValue } from '../utils/storeAccess.js';
 export async function getAttendance(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await requireStore(request, response);
@@ -37,14 +37,16 @@ export async function getAttendance(request: Request, response: Response, next: 
       .map((day) => ({
         updateOne: {
           filter: { franchise: storeId, employee: entry.employee, date: day.date },
-          update: { $setOnInsert: {
-            franchise: storeId,
-            employee: entry.employee,
-            date: day.date,
-            status: (day.shift === 'off' ? 'Week Off' : 'Present') as AttendanceRecord['status'],
-            comment: '',
-            createdBy: roster.createdBy,
-          } },
+          update: {
+            $setOnInsert: {
+              franchise: storeId,
+              employee: entry.employee,
+              date: day.date,
+              status: (day.shift === 'off' ? 'Week Off' : 'Present') as AttendanceRecord['status'],
+              comment: '',
+              createdBy: roster.createdBy,
+            }
+          },
           upsert: true,
         },
       }))));

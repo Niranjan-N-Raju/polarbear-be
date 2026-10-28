@@ -1,12 +1,12 @@
-import type { Request,Response } from 'express';
+import type { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Franchise } from '../models/Franchise.js';
-import { ADMIN_STORE_LIST_FIELDS,creatorId } from '../services/admin-stores.js';
+import { ADMIN_STORE_LIST_FIELDS, creatorId } from '../services/admin-stores.js';
 import { auditLog } from '../utils/audit.js';
-import { clampPage,escapeRegex,isSearchTooLong,SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
+import { clampPage, escapeRegex, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
 import { bodyTooLarge } from '../utils/requestBody.js';
-import { checkRateLimit,rateLimits } from '../utils/rateLimit.js';
-import { firstValidationMessage,storeArchiveSchema,storeBodySchema } from '../utils/validation.js';
+import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
+import { firstValidationMessage, storeArchiveSchema, storeBodySchema } from '../utils/validation.js';
 export async function getStores(request: Request, response: Response) {
   const page = clampPage(Math.max(1, Number.parseInt(String(request.query.page ?? '1'), 10) || 1));
   const limit = Math.min(100, Math.max(1, Number.parseInt(String(request.query.limit ?? '10'), 10) || 10));
@@ -99,7 +99,7 @@ export async function postStores(request: Request, response: Response) {
     });
     response.status(201).json({ franchise });
   } catch (error) {
-    if ((error as { code?: number; keyPattern?: Record<string, unknown> }).code === 11000) {
+    if ((error as { code?: number; keyPattern?: Record<string, unknown>; }).code === 11000) {
       response.status(409).json({ message: 'A store with this code already exists.' });
       return;
     }
@@ -129,14 +129,14 @@ export async function patchStores(request: Request, response: Response) {
   const { ownerName, ownerPhone, ownerEmail, ...storeFields } = body;
   const update = storeType === 'franchise'
     ? {
-        $set: {
-          ...storeFields,
-          storeType,
-          ...(ownerName !== undefined ? { ownerName } : {}),
-          ...(ownerPhone !== undefined ? { ownerPhone } : {}),
-          ...(ownerEmail !== undefined ? { ownerEmail } : {}),
-        },
-      }
+      $set: {
+        ...storeFields,
+        storeType,
+        ...(ownerName !== undefined ? { ownerName } : {}),
+        ...(ownerPhone !== undefined ? { ownerPhone } : {}),
+        ...(ownerEmail !== undefined ? { ownerEmail } : {}),
+      },
+    }
     : { $set: { ...storeFields, storeType }, $unset: { ownerName: 1, ownerPhone: 1, ownerEmail: 1 } };
   try {
     const franchise = await Franchise.findOneAndUpdate(
@@ -160,7 +160,7 @@ export async function patchStores(request: Request, response: Response) {
     });
     response.json({ franchise });
   } catch (error) {
-    if ((error as { code?: number; keyPattern?: Record<string, unknown> }).code === 11000) {
+    if ((error as { code?: number; keyPattern?: Record<string, unknown>; }).code === 11000) {
       response.status(409).json({ message: 'A store with this code already exists.' });
       return;
     }

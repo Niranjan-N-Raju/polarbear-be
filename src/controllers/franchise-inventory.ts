@@ -1,10 +1,10 @@
 import type { NextFunction } from 'express';
-import { type Request,type Response } from 'express';
+import { type Request, type Response } from 'express';
 import mongoose from 'mongoose';
-import { DumpedInventory,InventoryItem,Product } from '../models/Inventory.js';
-import { isDuplicateKeyError,MAX_PRODUCTS_PER_REQUEST,normalizeProductName,parsePositiveInteger,serializeItem,serializeProduct } from '../services/franchise-inventory.js';
+import { DumpedInventory, InventoryItem, Product } from '../models/Inventory.js';
+import { isDuplicateKeyError, MAX_PRODUCTS_PER_REQUEST, normalizeProductName, parsePositiveInteger, serializeItem, serializeProduct } from '../services/franchise-inventory.js';
 import { localDateValue } from '../utils/dateUtils.js';
-import { bodyRecord,isFranchiseAdmin,requireStore } from '../utils/franchiseRoute.js';
+import { bodyRecord, isFranchiseAdmin, requireStore } from '../utils/franchiseRoute.js';
 import { auditMutation } from '../utils/businessLimits.js';
 import { isDateValue } from '../utils/storeAccess.js';
 export async function getProducts(request: Request, response: Response, next: NextFunction) {

@@ -1,9 +1,9 @@
 import { type WithdrawalRecord } from '../models/Withdrawal.js';
-import { isMoneyAmount,localToday } from '../utils/businessLimits.js';
+import { isMoneyAmount, localToday } from '../utils/businessLimits.js';
 import { isDateValue } from '../utils/storeAccess.js';
 export const MAX_WITHDRAWAL_RESULTS = 1000;
-export type WithdrawalInput = Pick<WithdrawalRecord, 'date' | 'amount' | 'type'> & { reason: string };
-export function validate(body: Record<string, unknown>): { value: WithdrawalInput } | { error: string } {
+export type WithdrawalInput = Pick<WithdrawalRecord, 'date' | 'amount' | 'type'> & { reason: string; };
+export function validate(body: Record<string, unknown>): { value: WithdrawalInput; } | { error: string; } {
   if (!isDateValue(body.date)) return { error: 'A valid date is required.' };
   if (body.date > localToday()) return { error: 'Date cannot be in the future.' };
   const amount = body.amount;

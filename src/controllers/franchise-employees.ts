@@ -1,16 +1,16 @@
 import bcrypt from 'bcryptjs';
 import type { NextFunction } from 'express';
-import { type Request,type Response } from 'express';
+import { type Request, type Response } from 'express';
 import mongoose from 'mongoose';
 import { randomBytes } from 'node:crypto';
 import { Franchise } from '../models/Franchise.js';
-import { User,type UserDocumentFile } from '../models/User.js';
-import { contentDisposition,documentFields,getDocumentType,MAX_FILE_SIZE,pageValue,parseEmployee,resolveStore,SAFE_DOCUMENT_TYPES,safeUser,sanitizeFileName,targetForStore,UserWithDocuments } from '../services/franchise-employees.js';
-import { decryptBuffer,encryptBuffer } from '../utils/crypto.js';
+import { User, type UserDocumentFile } from '../models/User.js';
+import { contentDisposition, documentFields, getDocumentType, MAX_FILE_SIZE, pageValue, parseEmployee, resolveStore, SAFE_DOCUMENT_TYPES, safeUser, sanitizeFileName, targetForStore, UserWithDocuments } from '../services/franchise-employees.js';
+import { decryptBuffer, encryptBuffer } from '../utils/crypto.js';
 import { DEFAULT_POSITION_OPTIONS } from '../utils/employeePositions.js';
-import { decodeBase64Upload,detectAllowedUploadType,getBucket } from '../utils/fileUpload.js';
-import { bodyRecord,isFranchiseAdmin,stringQuery } from '../utils/franchiseRoute.js';
-import { clampPage,escapeRegex,isSearchTooLong,SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
+import { decodeBase64Upload, detectAllowedUploadType, getBucket } from '../utils/fileUpload.js';
+import { bodyRecord, isFranchiseAdmin, stringQuery } from '../utils/franchiseRoute.js';
+import { clampPage, escapeRegex, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
 import { isDateValue } from '../utils/storeAccess.js';
 export async function getUsers(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }

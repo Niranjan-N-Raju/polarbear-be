@@ -12,9 +12,9 @@ export function parsePositiveInteger(value: unknown) {
   return null;
 }
 export function isDuplicateKeyError(error: unknown) {
-  return (error as { code?: number } | null)?.code === 11000;
+  return (error as { code?: number; } | null)?.code === 11000;
 }
-export function serializeProduct(product: { _id: unknown; name: string; normalizedName: string; createdAt?: Date }) {
+export function serializeProduct(product: { _id: unknown; name: string; normalizedName: string; createdAt?: Date; }) {
   return {
     _id: String(product._id),
     name: product.name,
@@ -22,7 +22,7 @@ export function serializeProduct(product: { _id: unknown; name: string; normaliz
     createdAt: product.createdAt,
   };
 }
-export function serializeItem(item: { _id: unknown; productId: unknown; product: string; quantity: number; expiryDate: string }) {
+export function serializeItem(item: { _id: unknown; productId: unknown; product: string; quantity: number; expiryDate: string; }) {
   return {
     _id: String(item._id),
     productId: String(item.productId),

@@ -1,7 +1,7 @@
-import type { NextFunction,Request,Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Sale } from '../models/Sale.js';
-import { dateRange,isDuplicateKeyError,parseSaleRequest,saleAuditSnapshot } from '../services/franchise-sales.js';
+import { dateRange, isDuplicateKeyError, parseSaleRequest, saleAuditSnapshot } from '../services/franchise-sales.js';
 import { getStoreSales } from '../services/sales.js';
 import { auditMutation } from '../utils/businessLimits.js';
 import { authorizeStore } from '../utils/storeAccess.js';

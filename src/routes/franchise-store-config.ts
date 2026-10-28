@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import { byUser,rateLimitMiddleware,rateLimits } from '../utils/rateLimit.js';
+import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
 
-import { deleteStoresLogo,getStoresBranding,getStoresCycle,getStoresLogo,getStoresPositions,getStoresShifts,postStoresLogo,putStoresBranding,putStoresCycle,putStoresPositions,putStoresShifts } from '../controllers/franchise-store-config.js';
+import { deleteStoresLogo, getStoresBranding, getStoresCycle, getStoresLogo, getStoresPositions, getStoresShifts, postStoresLogo, putStoresBranding, putStoresCycle, putStoresPositions, putStoresShifts } from '../controllers/franchise-store-config.js';
 export const franchiseStoreConfigRouter = Router();
 const router = franchiseStoreConfigRouter;
 const uploadLimiter = rateLimitMiddleware('upload', rateLimits.upload, byUser);

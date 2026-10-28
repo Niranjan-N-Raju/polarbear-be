@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { deleteWithdrawalsId,getWithdrawals,postWithdrawals,putWithdrawalsId } from '../controllers/franchise-withdrawals.js';
+import { deleteWithdrawalsId, getWithdrawals, postWithdrawals, putWithdrawalsId } from '../controllers/franchise-withdrawals.js';
 import { requireAuth } from '../middleware/auth.js';
 export { MAX_WITHDRAWAL_RESULTS } from '../services/franchise-withdrawals.js';
 export const franchiseWithdrawalsRouter = Router();
