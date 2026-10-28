@@ -14,7 +14,8 @@
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit",
     "seed:demo": "tsx scripts/seedDemoData.ts",
-    "migrate:encrypt-pii": "tsx scripts/encryptLegacyPii.ts"
+    "migrate:encrypt-pii": "tsx scripts/encryptLegacyPii.ts",
+    "db:sync-indexes": "tsx scripts/syncIndexes.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

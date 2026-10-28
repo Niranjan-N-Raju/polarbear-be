@@ -1,12 +1,13 @@
 import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Attendance, type AttendanceRecord } from '../models/Attendance.js';
+import { AttendanceRemoval } from '../models/AttendanceRemoval.js';
 import { Franchise } from '../models/Franchise.js';
 import { User } from '../models/User.js';
 import { WeeklyRoster } from '../models/WeeklyRoster.js';
 import { MAX_ENTRIES, mondayOnOrBefore, serializeRoster, Shift, STATUSES, validMonday, weekDates } from '../services/franchise-attendance.js';
 import { auditMutation } from '../utils/businessLimits.js';
-import { exceedsMaxRange, localDateValue, MAX_RANGE_DAYS } from '../utils/dateUtils.js';
+import { businessDateValue, exceedsMaxRange, localDateValue, MAX_RANGE_DAYS } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { isArchivedStore, isDateValue } from '../utils/storeAccess.js';
@@ -30,27 +31,48 @@ export async function getAttendance(request: Request, response: Response, next: 
 
   // GET is treated as read-only by authorizeStore, so explicitly avoid materializing rows for archived stores.
   const storeState = hasRange ? await Franchise.findById(storeId).select('isActive archivedAt').lean() : null;
-  if (hasRange && storeState && !isArchivedStore(storeState)) {
-    const rosters = await WeeklyRoster.find({ franchise: storeId, 'entries.days.date': { $gte: from, $lte: to } }).lean();
-    const defaults = rosters.flatMap((roster) => roster.entries.flatMap((entry) => entry.days
-      .filter((day) => day.date >= from! && day.date <= to!)
-      .map((day) => ({
-        updateOne: {
-          filter: { franchise: storeId, employee: entry.employee, date: day.date },
-          update: {
-            $setOnInsert: {
-              franchise: storeId,
-              employee: entry.employee,
-              date: day.date,
-              status: (day.shift === 'off' ? 'Week Off' : 'Present') as AttendanceRecord['status'],
-              comment: '',
-              createdBy: roster.createdBy,
-            }
+  // Roster defaults are materialized only for elapsed business dates (never the future), only for
+  // employees active on that date, and never where an admin explicitly removed the mark.
+  const today = businessDateValue();
+  const defaultsTo = hasRange && to! < today ? to! : today;
+  if (hasRange && storeState && !isArchivedStore(storeState) && from! <= defaultsTo) {
+    const rosters = await WeeklyRoster.find({ franchise: storeId, 'entries.days.date': { $gte: from, $lte: defaultsTo } }).lean();
+    const candidates = rosters.flatMap((roster) => roster.entries.flatMap((entry) => entry.days
+      .filter((day) => day.date >= from! && day.date <= defaultsTo)
+      .map((day) => ({ createdBy: roster.createdBy, employee: entry.employee, day }))));
+    if (candidates.length) {
+      const employeeIds = [...new Set(candidates.map((candidate) => String(candidate.employee)))];
+      const [employees, removals] = await Promise.all([
+        User.find({ _id: { $in: employeeIds }, role: 'employee', franchises: storeId })
+          .select('_id dateOfJoining archivedAt isActive').lean(),
+        AttendanceRemoval.find({ franchise: storeId, employee: { $in: employeeIds }, date: { $gte: from, $lte: defaultsTo } })
+          .select('employee date').lean(),
+      ]);
+      const employeesById = new Map(employees.map((employee) => [String(employee._id), employee]));
+      const removed = new Set(removals.map((removal) => `${String(removal.employee)}:${removal.date}`));
+      const defaults = candidates
+        .filter(({ employee, day }) => {
+          const record = employeesById.get(String(employee));
+          return Boolean(record) && isEmployeeActiveOn(record!, day.date) && !removed.has(`${String(employee)}:${day.date}`);
+        })
+        .map(({ createdBy, employee, day }) => ({
+          updateOne: {
+            filter: { franchise: storeId, employee, date: day.date },
+            update: {
+              $setOnInsert: {
+                franchise: storeId,
+                employee,
+                date: day.date,
+                status: (day.shift === 'off' ? 'Week Off' : 'Present') as AttendanceRecord['status'],
+                comment: '',
+                createdBy,
+              }
+            },
+            upsert: true,
           },
-          upsert: true,
-        },
-      }))));
-    if (defaults.length) await Attendance.bulkWrite(defaults);
+        }));
+      if (defaults.length) await Attendance.bulkWrite(defaults);
+    }
   }
 
   const records = await Attendance.find({ franchise: storeId, ...(hasDate ? { date } : { date: { $gte: from, $lte: to } }) }).lean();
@@ -80,6 +102,10 @@ export async function putAttendance(request: Request, response: Response, next: 
   const skippedCount = employeeIds.length - savedRecords.length;
   if (!mongoose.isValidObjectId(request.auth!.id)) { response.status(400).json({ message: 'A valid authenticated user is required.' }); return; }
   const actor = new mongoose.Types.ObjectId(request.auth!.id);
+  const savedIds = savedRecords.map((record) => new mongoose.Types.ObjectId(record.employeeId as string));
+  const previous = savedIds.length
+    ? await Attendance.find({ franchise: storeId, date, employee: { $in: savedIds } }).select('employee status').lean()
+    : [];
   const operations = savedRecords.map((record) => ({
     updateOne: {
       filter: { franchise: storeId, employee: new mongoose.Types.ObjectId(record.employeeId as string), date },
@@ -87,9 +113,17 @@ export async function putAttendance(request: Request, response: Response, next: 
       upsert: true,
     },
   }));
-  if (operations.length) await Attendance.bulkWrite(operations);
+  if (operations.length) {
+    await Attendance.bulkWrite(operations);
+    // An explicit mark supersedes an earlier removal, so the roster default rules apply again.
+    await AttendanceRemoval.deleteMany({ franchise: storeId, date, employee: { $in: savedIds } });
+  }
   if (savedRecords.length) {
-    auditMutation(request, 'attendance.marked', { storeId, after: { date, records: savedRecords.map((record) => ({ employeeId: record.employeeId, status: record.status })) } });
+    auditMutation(request, 'attendance.marked', {
+      storeId,
+      before: { date, records: previous.map((record) => ({ employeeId: String(record.employee), status: record.status })) },
+      after: { date, records: savedRecords.map((record) => ({ employeeId: record.employeeId, status: record.status })) },
+    });
   }
   response.json({ message: skippedCount ? `Attendance saved for ${savedRecords.length} employee(s). ${skippedCount} employee(s) weren't active on this date and were skipped.` : 'Attendance saved successfully.', skippedCount });
 }
@@ -103,6 +137,15 @@ export async function deleteAttendance(request: Request, response: Response, nex
   if (!isDateValue(date) || !employeeId || !mongoose.isValidObjectId(employeeId)) { response.status(400).json({ message: 'A valid store, date, and employee are required.' }); return; }
   const deleted = await Attendance.findOneAndDelete({ franchise: storeId, employee: employeeId, date }).lean();
   if (!deleted) { response.status(404).json({ message: 'Attendance record not found.' }); return; }
+  // Remember the removal so viewing attendance does not re-create the roster default for this day.
+  await AttendanceRemoval.updateOne(
+    { franchise: storeId, employee: new mongoose.Types.ObjectId(employeeId), date },
+    {
+      $setOnInsert: { franchise: storeId, employee: new mongoose.Types.ObjectId(employeeId), date },
+      ...(mongoose.isValidObjectId(request.auth!.id) ? { $set: { createdBy: new mongoose.Types.ObjectId(request.auth!.id) } } : {}),
+    },
+    { upsert: true },
+  );
   auditMutation(request, 'attendance.removed', { storeId, targetId: employeeId, before: { date, status: deleted.status } });
   response.json({ message: 'Attendance record removed.' });
 }
@@ -171,10 +214,17 @@ export async function putAttendanceWeeklyRoster(request: Request, response: Resp
   }
   if (!mongoose.isValidObjectId(request.auth!.id)) { response.status(400).json({ message: 'A valid authenticated user is required.' }); return; }
   const rosterEntries = inputEntries.map((entry) => ({ employee: new mongoose.Types.ObjectId(entry.employeeId as string), days: (entry.days as Array<Record<string, unknown>>).map((day) => ({ date: day.date as string, shift: day.shift as string })) }));
-  await WeeklyRoster.findOneAndUpdate(
+  const previousRoster = await WeeklyRoster.findOneAndUpdate(
     { franchise: storeId, weekStart },
     { $set: { entries: rosterEntries }, $setOnInsert: { createdBy: new mongoose.Types.ObjectId(request.auth!.id) } },
-    { new: true, upsert: true, runValidators: true },
+    { new: false, upsert: true, runValidators: true },
   );
+  const rosterSummary = (items: Array<{ employee: unknown; days: Array<{ date: string; shift: string }> }>) =>
+    items.map((entry) => ({ employeeId: String(entry.employee), days: entry.days.map((day) => ({ date: day.date, shift: day.shift })) }));
+  auditMutation(request, 'attendance.roster.saved', {
+    storeId,
+    before: previousRoster ? { weekStart, entries: rosterSummary(previousRoster.entries ?? []) } : null,
+    after: { weekStart, entries: rosterSummary(rosterEntries) },
+  });
   response.json({ message: 'Weekly roster saved successfully.' });
 }

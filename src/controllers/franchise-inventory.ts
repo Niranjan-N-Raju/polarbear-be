@@ -3,7 +3,7 @@ import { type Request, type Response } from 'express';
 import mongoose from 'mongoose';
 import { DumpedInventory, InventoryItem, Product } from '../models/Inventory.js';
 import { isDuplicateKeyError, MAX_PRODUCTS_PER_REQUEST, normalizeProductName, parsePositiveInteger, serializeItem, serializeProduct } from '../services/franchise-inventory.js';
-import { localDateValue } from '../utils/dateUtils.js';
+import { businessDateValue } from '../utils/dateUtils.js';
 import { bodyRecord, isFranchiseAdmin, requireStore } from '../utils/franchiseRoute.js';
 import { auditMutation } from '../utils/businessLimits.js';
 import { isDateValue } from '../utils/storeAccess.js';
@@ -158,6 +158,10 @@ export async function postInventory(request: Request, response: Response, next: 
   response.status(201).json({ item: item ? serializeItem(item) : null });
 }
 
+function wroteDocument(result: { matchedCount?: number; modifiedCount?: number } | null | undefined) {
+  return (result?.matchedCount ?? 0) > 0 || (result?.modifiedCount ?? 0) > 0;
+}
+
 export async function patchInventory(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const store = await requireStore(request, response);
@@ -175,7 +179,7 @@ export async function patchInventory(request: Request, response: Response, next:
     response.status(404).json({ message: 'Inventory item not found or already empty.' });
     return;
   }
-  const today = localDateValue();
+  const today = businessDateValue();
 
   if (body.action === 'consume') {
     const quantity = parsePositiveInteger(body.quantity);
@@ -217,7 +221,19 @@ export async function patchInventory(request: Request, response: Response, next:
       quantity: { $gt: 0 },
     }).sort({ expiryDate: 1 }).lean();
     if (racedEarlier) {
-      await InventoryItem.updateOne({ _id: itemId, storeId }, { $inc: { quantity } });
+      let refunded = false;
+      try {
+        const refund = await InventoryItem.updateOne({ _id: itemId, storeId }, { $inc: { quantity } });
+        refunded = wroteDocument(refund);
+      } catch {
+        refunded = false;
+      }
+      if (!refunded) {
+        console.error('[inventory] Failed to refund consumed stock after a FIFO race.');
+        auditMutation(request, 'inventory.compensation.failed', { storeId, targetId: itemId, after: { action: 'consume', quantityToRestore: quantity } });
+        response.status(500).json({ message: 'Stock could not be updated. Please contact support.' });
+        return;
+      }
       response.status(409).json({ message: `Use the earlier expiry ${racedEarlier.expiryDate} first.` });
       return;
     }
@@ -241,15 +257,32 @@ export async function patchInventory(request: Request, response: Response, next:
       response.status(409).json({ message: 'Stock was already dumped.' });
       return;
     }
-    await DumpedInventory.create({
-      inventoryItemId: itemId,
-      storeId,
-      productId: before.productId,
-      product: before.product,
-      expiryDate: before.expiryDate,
-      quantity: before.quantity,
-      dumpedAt: new Date(),
-    });
+    try {
+      await DumpedInventory.create({
+        inventoryItemId: itemId,
+        storeId,
+        productId: before.productId,
+        product: before.product,
+        expiryDate: before.expiryDate,
+        quantity: before.quantity,
+        dumpedAt: new Date(),
+      });
+    } catch {
+      // Without a disposal-history row the zeroed quantity would be unaccounted for; restore it.
+      console.error('[inventory] Failed to record dumped stock; restoring quantity.');
+      let restored = false;
+      try {
+        const restore = await InventoryItem.updateOne({ _id: itemId, storeId, quantity: 0 }, { $set: { quantity: before.quantity } });
+        restored = wroteDocument(restore);
+      } catch {
+        restored = false;
+      }
+      if (!restored) {
+        auditMutation(request, 'inventory.compensation.failed', { storeId, targetId: itemId, after: { action: 'dump', quantityToRestore: before.quantity } });
+      }
+      response.status(500).json({ message: 'Expired stock could not be dumped. Please try again.' });
+      return;
+    }
     auditMutation(request, 'inventory.stock.dumped', { storeId, targetId: itemId, before: { quantity: before.quantity, expiryDate: before.expiryDate }, after: { quantity: 0 } });
     response.json({ message: 'Expired stock dumped successfully.' });
     return;

@@ -108,7 +108,14 @@ export const ENCRYPTED_USER_FIELDS = [
 export function decryptUserFields<T extends Record<string, unknown>>(user: T): T {
   for (const field of ENCRYPTED_USER_FIELDS) {
     const value = user[field];
-    if (typeof value === "string") (user as Record<string, unknown>)[field] = decrypt(value);
+    if (typeof value !== "string") continue;
+    try {
+      (user as Record<string, unknown>)[field] = decrypt(value);
+    } catch {
+      // One corrupt or undecryptable field must not fail the whole response; never log the value.
+      console.warn(`[crypto] Could not decrypt user field "${field}"; returning an empty value.`);
+      (user as Record<string, unknown>)[field] = "";
+    }
   }
   return user;
 }

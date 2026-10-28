@@ -1,6 +1,5 @@
 import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
-import { Advance } from '../models/Advance.js';
 import { Attendance } from '../models/Attendance.js';
 import { ExtraDay } from '../models/ExtraDay.js';
 import { Franchise } from '../models/Franchise.js';
@@ -8,13 +7,14 @@ import { Incentive } from '../models/Incentive.js';
 import { PnlInput } from '../models/PnlInput.js';
 import { Sale } from '../models/Sale.js';
 import { User } from '../models/User.js';
-import { ALLOWED_INPUT_KEYS, FIELD_KEY_PATTERN, MAX_FIELDS, MAX_MONTHS, MAX_PERIOD_WALK, ValueMap, finiteNonNegative, nextPeriod, periodForDate, toPlainValues } from '../services/franchise-pnl.js';
+import { ALLOWED_INPUT_KEYS, FIELD_KEY_PATTERN, MAX_FIELDS, MAX_MONTHS, MAX_PERIOD_WALK, ValueMap, addMonthsToPeriod, finiteNonNegative, nextPeriod, periodForDate, toPlainValues } from '../services/franchise-pnl.js';
 import { auditMutation } from '../utils/businessLimits.js';
-import { datesBetween, localDateValue } from '../utils/dateUtils.js';
+import { businessDateValue, datesBetween } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, isPeriodValue, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { PNL_COST_OF_GOODS_KEYS, PNL_EXPENSE_KEYS, PNL_RENT_KEYS, PNL_STAFF_SALARY_KEY } from '../utils/pnlExpenses.js';
 import { getCycleRange, resolveCycleSettings, roundCurrency } from '../utils/salaryCycle.js';
+import { withSaleTotals } from '../utils/saleTotals.js';
 export async function getPnl(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await requireStore(request, response);
@@ -26,7 +26,7 @@ export async function getPnl(request: Request, response: Response, next: NextFun
   if (!store) { response.status(404).json({ message: 'Store not found.' }); return; }
 
   const { cycleType, startDay } = resolveCycleSettings(store);
-  const today = localDateValue();
+  const today = businessDateValue();
   const currentPeriod = periodForDate(today, cycleType, startDay);
   const earliestSale = await Sale.findOne({ franchise: storeId }).sort({ date: 1 }).select('date').lean();
   if (!earliestSale) {
@@ -34,23 +34,25 @@ export async function getPnl(request: Request, response: Response, next: NextFun
     return;
   }
 
+  // Only the newest MAX_MONTHS periods are shown, so never walk from further back than that;
+  // this also keeps a mistyped historical year (e.g. 0226) from producing an empty or junk range.
+  const oldestShown = addMonthsToPeriod(currentPeriod, -(MAX_MONTHS - 1));
   const earliestPeriod = periodForDate(earliestSale.date, cycleType, startDay);
+  const startPeriod = earliestPeriod > oldestShown ? earliestPeriod : oldestShown;
   const periods: string[] = [];
-  // Walk the full history (hard-capped) and keep the newest MAX_MONTHS periods.
-  for (let cursor = earliestPeriod; cursor <= currentPeriod && periods.length < MAX_PERIOD_WALK; cursor = nextPeriod(cursor)) {
+  for (let cursor = startPeriod; cursor <= currentPeriod && periods.length < MAX_PERIOD_WALK; cursor = nextPeriod(cursor)) {
     periods.push(cursor);
   }
-  const periodsToShow = periods.slice(-MAX_MONTHS);
+  const periodsToShow = periods.length ? periods.slice(-MAX_MONTHS) : [currentPeriod];
   const overallFrom = getCycleRange(periodsToShow[0], cycleType, startDay).from;
   const overallTo = getCycleRange(periodsToShow[periodsToShow.length - 1], cycleType, startDay).to;
 
-  const [employees, sales, attendance, incentives, extraDays, advances, pnlInputs] = await Promise.all([
+  const [employees, sales, attendance, incentives, extraDays, pnlInputs] = await Promise.all([
     User.find({ role: 'employee', franchises: storeId }).select('name salary dateOfJoining isActive archivedAt').lean(),
-    Sale.find({ franchise: storeId, date: { $gte: overallFrom, $lte: overallTo } }).select('date totalSale totalExpenses swiggy zomato').lean(),
+    Sale.find({ franchise: storeId, date: { $gte: overallFrom, $lte: overallTo } }).select('date totalSale totalExpenses expenses swiggy zomato').lean(),
     Attendance.find({ franchise: storeId, date: { $gte: overallFrom, $lte: overallTo } }).select('employee date status').lean(),
     Incentive.find({ franchise: storeId, period: { $in: periodsToShow } }).lean(),
     ExtraDay.find({ franchise: storeId, period: { $in: periodsToShow } }).lean(),
-    Advance.find({ franchise: storeId, period: { $in: periodsToShow } }).lean(),
     PnlInput.find({ franchise: storeId, period: { $in: periodsToShow } }).select('period values').lean(),
   ]);
 
@@ -75,16 +77,19 @@ export async function getPnl(request: Request, response: Response, next: NextFun
   };
   const incentiveTotals = sumByEmployeePeriod(incentives, 'amount');
   const extraDayTotals = sumByEmployeePeriod(extraDays, 'days');
-  const advanceTotals = sumByEmployeePeriod(advances, 'amount');
   const pnlInputsByPeriod = new Map(pnlInputs.map((input) => [input.period, toPlainValues(input.values)]));
 
   const months = periodsToShow.map((period) => {
     const range = getCycleRange(period, cycleType, startDay);
-    const periodSales = sales.filter((sale) => sale.date >= range.from && sale.date <= range.to);
-    const revenue = periodSales.reduce((sum, sale) => sum + sale.totalSale, 0);
-    const storeExpenses = periodSales.reduce((sum, sale) => sum + sale.totalExpenses, 0);
-    const swiggyRevenue = periodSales.reduce((sum, sale) => sum + sale.swiggy, 0);
-    const zomatoRevenue = periodSales.reduce((sum, sale) => sum + sale.zomato, 0);
+    // Legacy sales may lack derived totals; coerce so one old row cannot turn a month into NaN.
+    const periodSales = sales
+      .filter((sale) => sale.date >= range.from && sale.date <= range.to)
+      .map((sale) => withSaleTotals({ ...sale, expenses: Array.isArray(sale.expenses) ? sale.expenses : [] }));
+    const money = (value: unknown) => Number(value) || 0;
+    const revenue = roundCurrency(periodSales.reduce((sum, sale) => sum + money(sale.totalSale), 0));
+    const storeExpenses = roundCurrency(periodSales.reduce((sum, sale) => sum + money(sale.totalExpenses), 0));
+    const swiggyRevenue = roundCurrency(periodSales.reduce((sum, sale) => sum + money(sale.swiggy), 0));
+    const zomatoRevenue = roundCurrency(periodSales.reduce((sum, sale) => sum + money(sale.zomato), 0));
     const cycleDates = datesBetween(range.from, range.to);
     const elapsedDates = cycleDates.filter((date) => date <= today);
     let calculatedPayroll = 0;
@@ -99,10 +104,11 @@ export async function getPnl(request: Request, response: Response, next: NextFun
       const salary = employee.salary ?? 0;
       const incentiveTotal = incentiveTotals.get(`${employeeId}:${period}`) ?? 0;
       const extraDaysTotal = extraDayTotals.get(`${employeeId}:${period}`) ?? 0;
-      const advanceTotal = advanceTotals.get(`${employeeId}:${period}`) ?? 0;
-      if (paidDays === 0 && incentiveTotal === 0 && extraDaysTotal === 0 && advanceTotal === 0) continue;
-      calculatedPayroll += roundCurrency((salary * (paidDays + extraDaysTotal)) / cycleDates.length) + incentiveTotal - advanceTotal;
+      if (paidDays === 0 && incentiveTotal === 0 && extraDaysTotal === 0) continue;
+      // P&L payroll is the full earned cost; salary advances are cash-flow timing and never reduce it.
+      calculatedPayroll += roundCurrency((salary * (paidDays + extraDaysTotal)) / cycleDates.length + incentiveTotal);
     }
+    calculatedPayroll = roundCurrency(calculatedPayroll);
 
     const inputValues = pnlInputsByPeriod.get(period) ?? {};
     const enteredStaffSalary = inputValues[PNL_STAFF_SALARY_KEY] ?? 0;
@@ -166,11 +172,16 @@ export async function putPnlInputs(request: Request, response: Response, next: N
   const storeId = await requireStore(request, response);
   if (!storeId) return;
   if (!(await Franchise.exists({ _id: storeId }))) { response.status(404).json({ message: 'Store not found.' }); return; }
+  const existing = await PnlInput.findOne({ franchise: storeId, period }).select('values').lean();
+  const previousValues = toPlainValues(existing?.values);
+  // Merge per key so a client sending a subset of fields never wipes the others.
+  const setValues = Object.fromEntries(Object.entries(values).map(([key, value]) => [`values.${key}`, value]));
   const input = await PnlInput.findOneAndUpdate(
     { franchise: storeId, period },
-    { $set: { values }, $setOnInsert: { createdBy: new mongoose.Types.ObjectId(request.auth!.id) } },
+    { ...(Object.keys(setValues).length ? { $set: setValues } : {}), $setOnInsert: { createdBy: new mongoose.Types.ObjectId(request.auth!.id) } },
     { new: true, upsert: true, runValidators: true },
   ).lean();
-  auditMutation(request, 'pnl.inputs.saved', { storeId, targetId: storeId, after: { period, values } });
+  const before = Object.fromEntries(Object.keys(values).map((key) => [key, previousValues[key] ?? null]));
+  auditMutation(request, 'pnl.inputs.saved', { storeId, targetId: storeId, before: { period, values: before }, after: { period, values } });
   response.json({ message: 'P&L inputs saved.', input: { period: input!.period, values: toPlainValues(input!.values) } });
 }

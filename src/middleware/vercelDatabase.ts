@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import { connectToDatabase } from "../config/database.js";
+import { connectToDatabase, DatabaseCooldownError } from "../config/database.js";
 import { ConfigurationError, loadConfig } from "../config/env.js";
 
 export const vercelDatabase: RequestHandler = async (request, response, next) => {
@@ -14,7 +14,9 @@ export const vercelDatabase: RequestHandler = async (request, response, next) =>
     stage = "connection";
     await connectToDatabase(config);
   } catch (error) {
-    if (error instanceof ConfigurationError) {
+    if (error instanceof DatabaseCooldownError) {
+      // Fail fast during the post-failure cooldown; the original failure was already logged.
+    } else if (error instanceof ConfigurationError) {
       console.error("[database] Configuration invalid:", error.message);
     } else {
       console.error(`[database] ${stage} failed.`,

@@ -169,7 +169,22 @@ describe('per-user endpoint budgets', () => {
 
   it('throttles upload endpoints per user', async () => {
     const path = `/stores/logo?storeId=${otherStoreId}`;
+    const upload = () => fetch(`${api.url}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${api.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base64: 'AAAA' }),
+    });
     for (let index = 0; index < rateLimits.upload.maxAttempts; index += 1) {
+      assert.notEqual((await upload()).status, 429);
+    }
+    assert.equal((await upload()).status, 429);
+    // Viewing files uses a separate read budget, so an exhausted upload budget does not block downloads.
+    assert.notEqual((await get(path)).status, 429);
+  });
+
+  it('throttles file downloads on their own read budget', async () => {
+    const path = `/stores/logo?storeId=${otherStoreId}`;
+    for (let index = 0; index < rateLimits.uploadRead.maxAttempts; index += 1) {
       assert.notEqual((await get(path)).status, 429);
     }
     assert.equal((await get(path)).status, 429);

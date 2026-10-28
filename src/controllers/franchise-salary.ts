@@ -9,7 +9,7 @@ import { User } from '../models/User.js';
 import { collections, EntryKind, groupByEmployee, id, labels, number, serializeEntry, validateEntry } from '../services/franchise-salary.js';
 import { auditMutation } from '../utils/businessLimits.js';
 import { decryptUserFields } from '../utils/crypto.js';
-import { datesBetween, localDateValue } from '../utils/dateUtils.js';
+import { businessDateValue, businessDayStart, datesBetween } from '../utils/dateUtils.js';
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, isPeriodValue, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { getCycleRange, resolveCycleSettings, roundCurrency } from '../utils/salaryCycle.js';
@@ -24,9 +24,10 @@ export async function getSalary(request: Request, response: Response, next: Next
   const { cycleType, startDay, endDay } = resolveCycleSettings(store);
   const range = getCycleRange(period, cycleType, startDay);
   const cycleDates = datesBetween(range.from, range.to);
-  const today = localDateValue();
+  const today = businessDateValue();
   const [employees, attendance, incentives, extraDays, advances] = await Promise.all([
-    User.find({ role: 'employee', isActive: { $ne: false }, franchises: storeId }).select('name position employmentType salary dateOfJoining isActive archivedAt').sort({ name: 1 }).lean(),
+    // Include employees archived during or after this cycle so their earned pay is still listed.
+    User.find({ role: 'employee', franchises: storeId, $or: [{ isActive: { $ne: false } }, { archivedAt: { $gte: businessDayStart(range.from) } }] }).select('name position employmentType salary dateOfJoining isActive archivedAt').sort({ name: 1 }).lean(),
     Attendance.find({ franchise: storeId, date: { $gte: range.from, $lte: range.to } }).lean(),
     Incentive.find({ franchise: storeId, period }).lean(),
     ExtraDay.find({ franchise: storeId, period }).lean(),
@@ -50,13 +51,13 @@ export async function getSalary(request: Request, response: Response, next: Next
     const employeeIncentives = (incentivesByEmployee.get(employeeId) ?? []).map((item: any) => ({ id: id(item._id), type: item.type, amount: number(item.amount) }));
     const employeeExtraDays = (extraDaysByEmployee.get(employeeId) ?? []).map((item: any) => ({ id: id(item._id), type: item.type, days: number(item.days) }));
     const employeeAdvances = (advancesByEmployee.get(employeeId) ?? []).map((item: any) => ({ id: id(item._id), type: item.type, amount: number(item.amount) }));
-    const incentiveTotal = employeeIncentives.reduce((sum, item) => sum + item.amount, 0);
+    const incentiveTotal = roundCurrency(employeeIncentives.reduce((sum, item) => sum + item.amount, 0));
     const extraDaysTotal = employeeExtraDays.reduce((sum, item) => sum + item.days, 0);
-    const advanceTotal = employeeAdvances.reduce((sum, item) => sum + item.amount, 0);
+    const advanceTotal = roundCurrency(employeeAdvances.reduce((sum, item) => sum + item.amount, 0));
     const salary = number(employee.salary);
     // Prorate against the full cycle, not just employment-eligible dates.
     // Projection adds future eligible days; earned pay only includes recorded paid days and adjustments.
-    return { employeeId, name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', salary, paidDays, absentDays, weekOffDays, missingDays, futureDays, eligibleDays: eligibleDates.length, incentives: employeeIncentives, incentiveTotal, extraDays: employeeExtraDays, extraDaysTotal, advances: employeeAdvances, advanceTotal, earnedSalary: roundCurrency((salary * (paidDays + extraDaysTotal)) / cycleDates.length) + incentiveTotal - advanceTotal, projectedSalary: roundCurrency((salary * (paidDays + futureDays + extraDaysTotal)) / cycleDates.length) + incentiveTotal - advanceTotal };
+    return { employeeId, name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', salary, paidDays, absentDays, weekOffDays, missingDays, futureDays, eligibleDays: eligibleDates.length, incentives: employeeIncentives, incentiveTotal, extraDays: employeeExtraDays, extraDaysTotal, advances: employeeAdvances, advanceTotal, earnedSalary: roundCurrency((salary * (paidDays + extraDaysTotal)) / cycleDates.length + incentiveTotal - advanceTotal), projectedSalary: roundCurrency((salary * (paidDays + futureDays + extraDaysTotal)) / cycleDates.length + incentiveTotal - advanceTotal) };
   });
   response.json({ store: { id: id(store._id), name: store.name }, cycle: { configured: Boolean(store.salaryCycleConfiguredAt), type: cycleType, startDay, endDay, ...range, totalDays: cycleDates.length }, projections });
 }
@@ -93,15 +94,15 @@ export async function getSalarySlip(request: Request, response: Response, next: 
   if (!storeId) return;
   const store = await Franchise.findById(storeId).select('name address phone logo salaryCycleType salaryCycleStartDay salaryCycleEndDay').lean();
   if (!store) { response.status(404).json({ message: 'Store not found.' }); return; }
-  const employee: any = await User.findOne({ _id: employeeId, role: 'employee', franchises: storeId }).select('name position employmentType salary dateOfJoining bankName bankAccountNumber bankIfsc panNumber').lean();
+  const employee: any = await User.findOne({ _id: employeeId, role: 'employee', franchises: storeId }).select('name position employmentType salary dateOfJoining isActive archivedAt bankName bankAccountNumber bankIfsc panNumber').lean();
   if (!employee) { response.status(404).json({ message: 'Employee not found.' }); return; }
   decryptUserFields(employee);
   const { cycleType, startDay } = resolveCycleSettings(store);
   const range = getCycleRange(period, cycleType, startDay);
   const cycleDates = datesBetween(range.from, range.to);
-  const today = localDateValue();
-  const joiningDate = employee.dateOfJoining ? localDateValue(new Date(employee.dateOfJoining)) : range.from;
-  const payableDates = cycleDates.filter((date) => date >= joiningDate);
+  const today = businessDateValue();
+  // Only dates within the employee's employment (joining through last working day) are payable.
+  const payableDates = cycleDates.filter((date) => isEmployeeActiveOn(employee, date));
   const elapsedDates = payableDates.filter((date) => date <= today);
   const [attendance, incentives, extraDays, advances] = await Promise.all([
     Attendance.find({ franchise: storeId, employee: employeeId, date: { $gte: range.from, $lte: range.to } }).select('date status').lean(),
@@ -115,11 +116,24 @@ export async function getSalarySlip(request: Request, response: Response, next: 
   const absentDays = elapsedDates.filter((date) => attendanceByDate.get(date) === 'Absent').length;
   const paidDays = presentDays + weekOffDays;
   const extraDaysTotal = extraDays.reduce((sum: number, item: any) => sum + number(item.days), 0);
-  const incentiveTotal = incentives.reduce((sum: number, item: any) => sum + number(item.amount), 0);
-  const advanceTotal = advances.reduce((sum: number, item: any) => sum + number(item.amount), 0);
+  const incentiveTotal = roundCurrency(incentives.reduce((sum: number, item: any) => sum + number(item.amount), 0));
+  const advanceTotal = roundCurrency(advances.reduce((sum: number, item: any) => sum + number(item.amount), 0));
   const basicSalary = roundCurrency((number(employee.salary) * (paidDays + extraDaysTotal)) / cycleDates.length);
-  response.json({ store: { name: store.name, address: store.address ?? '', phone: store.phone ?? '', logoUrl: store.logo?.fileId ? `/api/stores/logo?storeId=${id(storeId)}` : '' }, period, periodLabel: new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(`${period}-01T00:00:00`)), employee: { name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', bankName: employee.bankName ?? '', bankAccountNumber: employee.bankAccountNumber ?? '', bankIfsc: employee.bankIfsc ?? '', panNumber: employee.panNumber ?? '' }, attendance: { totalWorkingDays: payableDates.length, presentDays, weekOffDays, absentDays, extraDays: extraDays.map((item: any) => ({ type: item.type, days: item.days })), extraDaysTotal }, earnings: { basicSalary, grossEarnings: basicSalary }, deductions: { advances, advanceTotal, totalDeductions: advanceTotal }, incentives, incentiveTotal, netPay: basicSalary + incentiveTotal - advanceTotal });
+  const netPay = roundCurrency(basicSalary + incentiveTotal - advanceTotal);
+  response.json({ store: { name: store.name, address: store.address ?? '', phone: store.phone ?? '', logoUrl: store.logo?.fileId ? `/api/stores/logo?storeId=${id(storeId)}` : '' }, period, periodLabel: new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(`${period}-01T00:00:00`)), employee: { name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', bankName: employee.bankName ?? '', bankAccountNumber: employee.bankAccountNumber ?? '', bankIfsc: employee.bankIfsc ?? '', panNumber: employee.panNumber ?? '' }, attendance: { totalWorkingDays: payableDates.length, presentDays, weekOffDays, absentDays, extraDays: extraDays.map((item: any) => ({ type: item.type, days: item.days })), extraDaysTotal }, earnings: { basicSalary, grossEarnings: basicSalary }, deductions: { advances, advanceTotal, totalDeductions: advanceTotal }, incentives, incentiveTotal, netPay });
 }
+
+/** An employee's extra days for one period can never exceed the number of days in that cycle. */
+async function exceedsCycleExtraDays(storeId: mongoose.Types.ObjectId, employeeId: unknown, period: string, days: number, excludeId?: unknown) {
+  const store = await Franchise.findById(storeId).select('salaryCycleType salaryCycleStartDay salaryCycleEndDay').lean();
+  const { cycleType, startDay } = resolveCycleSettings(store ?? {});
+  const range = getCycleRange(period, cycleType, startDay);
+  const cycleLength = datesBetween(range.from, range.to).length;
+  const others = await ExtraDay.find({ franchise: storeId, employee: employeeId, period, ...(excludeId ? { _id: { $ne: excludeId } } : {}) }).select('days').lean();
+  const total = others.reduce((sum: number, item: any) => sum + number(item.days), 0) + days;
+  return total > cycleLength ? cycleLength : null;
+}
+const extraDayCapMessage = (cycleLength: number) => `Total extra days for this employee cannot exceed the ${cycleLength}-day salary cycle.`;
 
 export async function listEntry(kind: EntryKind, request: import('express').Request, response: import('express').Response, next: import('express').NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
@@ -142,6 +156,10 @@ export async function createEntry(kind: EntryKind, request: import('express').Re
   if (!storeId) return;
   const employee = await User.findOne({ _id: employeeId, role: 'employee', franchises: storeId }).select('_id').lean();
   if (!employee) { response.status(404).json({ message: 'Employee not found in this store.' }); return; }
+  if (kind === 'extraDay') {
+    const cap = await exceedsCycleExtraDays(storeId, employeeId, body.period, Number(validated.value.days));
+    if (cap !== null) { response.status(400).json({ message: extraDayCapMessage(cap) }); return; }
+  }
   const entry = await collections[kind].create({ franchise: storeId, employee: employeeId, period: body.period, ...validated.value, createdBy: new mongoose.Types.ObjectId(request.auth!.id) });
   auditMutation(request, `salary.${kind}.created`, { storeId, targetId: entry._id, after: { employeeId, period: body.period, ...validated.value } });
   response.status(201).json({ message: `${labels[kind]} added successfully.`, [kind]: serializeEntry(entry, kind) });
@@ -161,6 +179,10 @@ export async function updateEntry(kind: EntryKind, request: import('express').Re
   const entry = await collections[kind].findOne({ _id: entryId, franchise: storeId });
   if (!entry) { response.status(404).json({ message: kind === "extraDay" ? "Extra days entry not found." : kind === "advance" ? "Advance not found." : "Incentive not found." }); return; }
 
+  if (kind === 'extraDay') {
+    const cap = await exceedsCycleExtraDays(storeId, entry.employee, String(entry.period), Number(updateValue.days), entry._id);
+    if (cap !== null) { response.status(400).json({ message: extraDayCapMessage(cap) }); return; }
+  }
   const before = serializeEntry(entry, kind);
   Object.assign(entry, updateValue);
   await entry.save();

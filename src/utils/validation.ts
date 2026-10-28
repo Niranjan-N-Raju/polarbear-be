@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MAX_MONEY_AMOUNT } from './businessLimits.js';
+import { hasCurrencyPrecision, isBusinessYear, localToday, MAX_MONEY_AMOUNT } from './businessLimits.js';
 
 const optionalText = (maxLength: number) =>
   z.string().max(maxLength, `Must be ${maxLength} characters or fewer.`).optional().transform((value) => value?.trim());
@@ -44,14 +44,14 @@ export const createUserSchema = z.object({
   password: z.string().max(200).optional(),
   role: z.enum(['admin', 'sub_admin', 'franchise_admin', 'employee']).optional(),
   franchiseIds: z.array(z.string().max(50)).max(50).optional(),
-  phone: z.string().max(20).optional().transform((value) => value?.trim()),
+  phone: optionalPhone,
 });
 
 export const patchUserSchema = z.object({
   name: nameSchema.optional(),
   role: z.enum(['admin', 'sub_admin', 'franchise_admin', 'employee']).optional(),
   franchiseIds: z.array(z.string().max(50)).max(50).optional(),
-  phone: z.string().max(20).optional().transform((value) => value?.trim()),
+  phone: optionalPhone,
 });
 
 export const profileSchema = z.object({
@@ -66,15 +66,11 @@ export { emailSchema, passwordSchema };
 export function firstValidationMessage(error: z.ZodError): string {
   return error.issues[0]?.message ?? 'Invalid input.';
 }
-function localToday(): string {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-}
-
 const saleAmount = (field: string) =>
   z.number({ error: `A valid ${field} is required.` })
     .min(0, `A valid ${field} is required.`)
-    .max(MAX_MONEY_AMOUNT, `The ${field} is too large.`);
+    .max(MAX_MONEY_AMOUNT, `The ${field} is too large.`)
+    .refine(hasCurrencyPrecision, `The ${field} can have at most 2 decimal places.`);
 
 export const saleBodySchema = z.object({
   storeId: z.string().max(50),
@@ -84,6 +80,7 @@ export const saleBodySchema = z.object({
       const date = new Date(`${value}T00:00:00Z`);
       return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
     }, 'A valid date is required.')
+    .refine(isBusinessYear, 'A valid date is required.')
     .refine((value) => value <= localToday(), 'Date cannot be in the future.'),
   totalSale: saleAmount('total sale'),
   swiggy: saleAmount('swiggy'),

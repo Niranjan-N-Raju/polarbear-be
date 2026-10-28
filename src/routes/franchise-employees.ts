@@ -6,6 +6,7 @@ export { contentDisposition, sanitizeFileName } from '../services/franchise-empl
 export const franchiseEmployeesRouter = Router();
 const router = franchiseEmployeesRouter;
 const uploadLimiter = rateLimitMiddleware('upload', rateLimits.upload, byUser);
+const uploadReadLimiter = rateLimitMiddleware('upload-read', rateLimits.uploadRead, byUser);
 router.get('/users', requireAuth, getUsers);
 router.get('/users/:id', requireAuth, getUsersId);
 router.post('/users', requireAuth, postUsers);
@@ -13,5 +14,5 @@ router.patch('/users/:id', requireAuth, patchUsersId);
 router.put('/users/:id', requireAuth, putUsersId);
 router.delete('/users/:id', requireAuth, deleteUsersId);
 router.post('/users/:id/documents/:documentType', requireAuth, uploadLimiter, postUsersIdDocumentsDocumentType);
-router.get('/users/:id/documents/:documentType', requireAuth, uploadLimiter, getUsersIdDocumentsDocumentType);
+router.get('/users/:id/documents/:documentType', requireAuth, uploadReadLimiter, getUsersIdDocumentsDocumentType);
 router.delete('/users/:id/documents/:documentType', requireAuth, deleteUsersIdDocumentsDocumentType);

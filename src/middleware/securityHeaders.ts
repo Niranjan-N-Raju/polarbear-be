@@ -5,7 +5,8 @@ const DEV_ORIGINS = [3000, 3001, 3002, 3003, 3004, 3005, 5173].flatMap((port) =>
   `http://127.0.0.1:${port}`,
 ]);
 
-const isProduction = (): boolean => process.env.NODE_ENV === 'production';
+/** Every Vercel environment (production and preview) is internet-facing, so treat it as production. */
+export const isProduction = (): boolean => process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
 
 /** Production requires an explicit WEB_ORIGINS allowlist; localhost defaults apply only outside production. */
 export function allowedOrigins(): string[] {
@@ -20,9 +21,12 @@ export function allowedOrigins(): string[] {
 /**
  * TRUST_PROXY must be the exact number of trusted reverse-proxy hops (e.g. "1").
  * `true`/wildcards are rejected because they let clients spoof X-Forwarded-For and bypass per-IP rate limits.
+ * When unset on Vercel (VERCEL=1) it defaults to 1 hop: Vercel's edge overwrites X-Forwarded-For with
+ * the real client address, so trusting that single hop is safe and gives per-client rate limits.
  */
 export function configureTrustProxy(app: Express): void {
-  const raw = process.env.TRUST_PROXY?.trim();
+  const configured = process.env.TRUST_PROXY?.trim();
+  const raw = configured || (process.env.VERCEL === '1' ? '1' : '');
   if (!raw || raw === '0' || raw === 'false') {
     app.set('trust proxy', false);
     return;

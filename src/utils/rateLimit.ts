@@ -14,7 +14,8 @@ export interface RateLimitConfig {
 
 /**
  * Storage backend for rate-limit counters. The default is process-local memory, so each API
- * instance enforces its own budget. A multi-instance deployment must either install a shared
+ * instance enforces its own budget. On Vercel every warm function instance has its own counters
+ * and a cold start resets them, so these limits are best-effort per instance, not global. A multi-instance deployment must either install a shared
  * store via `setRateLimitStore()` (e.g. a Redis-backed adapter that keeps a synchronous local
  * cache) or enforce limits at the edge/WAF. See INDEPENDENT-SECURITY-REVIEW.md (R8).
  */
@@ -207,5 +208,10 @@ export const rateLimits = {
   apiIp: { windowMs: 60_000, maxAttempts: positiveIntEnv('API_RATE_LIMIT_PER_MINUTE', 600), lockoutMs: 60_000 },
   expensiveRead: { windowMs: 60_000, maxAttempts: positiveIntEnv('EXPENSIVE_RATE_LIMIT_PER_MINUTE', 60), lockoutMs: 60_000 },
   upload: { windowMs: 10 * 60_000, maxAttempts: 30, lockoutMs: 10 * 60_000 },
+  // Downloads of stored files (logo, employee documents) have their own budget so viewing never
+  // consumes the upload allowance.
+  uploadRead: { windowMs: 10 * 60_000, maxAttempts: 300, lockoutMs: 10 * 60_000 },
+  // Name/language edits on PATCH /api/me; password changes keep the stricter passwordChange budget.
+  profileUpdate: { windowMs: 15 * 60_000, maxAttempts: 30, lockoutMs: 15 * 60_000 },
   write: { windowMs: 60_000, maxAttempts: 120, lockoutMs: 60_000 },
 } satisfies Record<string, RateLimitConfig>;

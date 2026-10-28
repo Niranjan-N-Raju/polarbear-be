@@ -6,9 +6,10 @@ import { deleteStoresLogo, getStoresBranding, getStoresCycle, getStoresLogo, get
 export const franchiseStoreConfigRouter = Router();
 const router = franchiseStoreConfigRouter;
 const uploadLimiter = rateLimitMiddleware('upload', rateLimits.upload, byUser);
+const uploadReadLimiter = rateLimitMiddleware('upload-read', rateLimits.uploadRead, byUser);
 router.get('/stores/branding', requireAuth, getStoresBranding);
 router.put('/stores/branding', requireAuth, putStoresBranding);
-router.get('/stores/logo', requireAuth, uploadLimiter, getStoresLogo);
+router.get('/stores/logo', requireAuth, uploadReadLimiter, getStoresLogo);
 router.post('/stores/logo', requireAuth, uploadLimiter, postStoresLogo);
 router.delete('/stores/logo', requireAuth, deleteStoresLogo);
 router.get('/stores/cycle', requireAuth, getStoresCycle);

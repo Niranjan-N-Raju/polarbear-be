@@ -24,7 +24,12 @@ export async function get(request: Request, response: Response) {
 
 export async function patch(request: Request, response: Response) {
   const auth = request.auth!;
-  const limit = checkRateLimit(`password-change:${auth.id}`, rateLimits.passwordChange);
+  const rawBody = request.body && typeof request.body === 'object' ? request.body as Record<string, unknown> : {};
+  const changingPassword = rawBody.newPassword !== undefined;
+  // Only password changes consume the strict password budget; name/language edits use their own.
+  const limit = changingPassword
+    ? checkRateLimit(`password-change:${auth.id}`, rateLimits.passwordChange)
+    : checkRateLimit(`profile-update:${auth.id}`, rateLimits.profileUpdate);
   if (!limit.allowed) {
     response.setHeader('Retry-After', String(Math.ceil((limit.retryAfterMs ?? 0) / 1000)));
     response.status(429).json({ message: 'Too many requests. Please try again later.' });
@@ -100,6 +105,8 @@ export async function patch(request: Request, response: Response) {
     email: user.email,
     role: user.role,
     sessionVersion: user.sessionVersion,
+    // A password change starts a new session; other edits keep the original 24h absolute limit.
+    ...(newPassword !== undefined ? {} : { sessionStart: auth.sessionStart }),
   });
   response.json({ message: 'Profile updated', token, mustChangePassword: user.mustChangePassword === true });
 }

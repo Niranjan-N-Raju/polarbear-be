@@ -11,8 +11,10 @@ import {
   sendRateLimited
 } from "../utils/rateLimit.js";
 import { SESSION_ABSOLUTE_MAX_SECONDS, signSessionToken } from "../utils/token.js";
+import { auditLog, emailHashPrefix } from "../utils/audit.js";
 export async function postLogin(request: Request, response: Response) {
-  // request.ip honours only the configured TRUST_PROXY hop count, so X-Forwarded-For cannot be spoofed.
+  // request.ip honours only the configured TRUST_PROXY hop count (1 by default on Vercel, whose edge
+  // overwrites X-Forwarded-For), so clients cannot spoof their address via that header.
   const ip = request.ip || request.socket.remoteAddress || "unknown";
   const ipAttempts = checkRateLimit(`login-ip-attempts:${ip}`, rateLimits.loginIpAttempts);
   const ipFailures = peekRateLimit(`login-ip-failures:${ip}`);
@@ -68,12 +70,14 @@ export async function postLogin(request: Request, response: Response) {
       recordRateLimitFailure(accountKey, rateLimits.loginAccountFailures);
       recordRateLimitFailure(accountGlobalKey, rateLimits.loginAccountGlobalFailures);
       recordRateLimitFailure(`login-ip-failures:${ip}`, rateLimits.loginIpFailures);
+      auditLog("auth.login.failed", { ip, metadata: { emailHash: emailHashPrefix(normalizedEmail), reason: user ? "bad_password" : "unknown_account" } });
       response.status(401).json({ message: "Invalid email or password." });
       return;
     }
 
     if (user.role === "franchise_admin" || user.role === "employee") {
       if ((user.franchises ?? []).length === 0) {
+        auditLog("auth.login.failed", { actorId: user._id.toString(), actorRole: user.role, ip, metadata: { emailHash: emailHashPrefix(normalizedEmail), reason: "no_store" } });
         response.status(403).json({ message: "No stores are associated with this user." });
         return;
       }
@@ -90,6 +94,7 @@ export async function postLogin(request: Request, response: Response) {
       role: user.role,
       sessionVersion: user.sessionVersion,
     });
+    auditLog("auth.login.succeeded", { actorId: user._id.toString(), actorRole: user.role, ip, metadata: { emailHash: emailHashPrefix(normalizedEmail) } });
     response.status(200).json({
       message: "Login successful.",
       token,
@@ -130,6 +135,7 @@ export async function postExtend(request: Request, response: Response) {
     sessionVersion: user.sessionVersion,
     sessionStart: user.sessionStart,
   });
+  auditLog('auth.session.extended', { actorId: user.id, actorRole: user.role, ip: request.ip });
   response.json({ message: 'Session extended.', token });
 }
 
@@ -140,5 +146,6 @@ export async function postLogout(request: Request, response: Response) {
     { _id: new mongoose.Types.ObjectId(request.auth!.id) },
     { $inc: { sessionVersion: 1 } },
   );
+  auditLog('auth.logout', { actorId: request.auth!.id, actorRole: request.auth!.role, ip: request.ip });
   response.json({ message: 'Logged out.' });
 }

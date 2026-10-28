@@ -1,13 +1,45 @@
 export const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
+export const BUSINESS_TIME_ZONE = "Asia/Kolkata";
+
+const businessDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: BUSINESS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** Calendar date (YYYY-MM-DD) of an instant in the business timezone (India), independent of server TZ. */
+export function businessDateValue(date: Date = new Date()): string {
+  const parts = businessDateFormatter.formatToParts(date);
+  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}`;
+}
+
+/** First and last date of the current business-timezone month. */
+export function businessMonthRange(date: Date = new Date()): { from: string; to: string } {
+  const today = businessDateValue(date);
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7));
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  const prefix = today.slice(0, 7);
+  return { from: `${prefix}-01`, to: `${prefix}-${String(lastDay).padStart(2, "0")}` };
+}
+
+/** Adds whole days to a YYYY-MM-DD value using UTC arithmetic (no DST/timezone drift). */
+export function addDaysToDateValue(value: string, days: number): string {
+  const date = new Date(`${value}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Instant at which a business date begins (midnight Asia/Kolkata, UTC+05:30, no DST). */
+export function businessDayStart(value: string): Date {
+  return new Date(`${value}T00:00:00+05:30`);
+}
+
 export function currentMonthRange(): { from: string; to: string } {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const from = `${year}-${String(month + 1).padStart(2, "0")}-01`;
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const to = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
-  return { from, to };
+  return businessMonthRange();
 }
 
 // Build from local calendar fields instead of toISOString(), which can shift
@@ -22,7 +54,7 @@ export function localDateValue(date = new Date()): string {
 export function dateValueFromDate(value: string | Date): string {
   if (typeof value === "string" && DATE_PATTERN.test(value)) return value;
   const date = value instanceof Date ? value : new Date(value);
-  return localDateValue(date);
+  return businessDateValue(date);
 }
 
 export function isValidDate(value: string): boolean {

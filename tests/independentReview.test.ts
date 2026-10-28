@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 import { Attendance } from '../src/models/Attendance.js';
+import { AttendanceRemoval } from '../src/models/AttendanceRemoval.js';
 import { Franchise } from '../src/models/Franchise.js';
 import { User } from '../src/models/User.js';
 import { WeeklyRoster } from '../src/models/WeeklyRoster.js';
@@ -59,6 +60,9 @@ describe('independent review: attendance GET has no side effects on archived sto
       entries: [{ employee: userId, days: [{ date: '2025-01-01', shift: 'morning' }] }],
     }]));
     mock.method(Attendance, 'find', () => queryResult([]));
+    // Defaults apply only to employees active on the (past) roster date with no recorded removal.
+    mock.method(User, 'find', () => queryResult([{ _id: userId, isActive: true, dateOfJoining: new Date('2024-01-01') }]));
+    mock.method(AttendanceRemoval, 'find', () => queryResult([]));
     return mock.method(Attendance, 'bulkWrite', async () => ({}));
   }
 

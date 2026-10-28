@@ -15,7 +15,7 @@ import { franchiseSalaryRouter } from "./routes/franchise-salary.js";
 import { healthRouter } from "./routes/health.js";
 import { profileRouter } from "./routes/profile.js";
 import { rejectDangerousKeys } from "./middleware/rejectDangerousKeys.js";
-import { cors, securityHeaders } from "./middleware/securityHeaders.js";
+import { configureTrustProxy, cors, securityHeaders } from "./middleware/securityHeaders.js";
 import { byIp, rateLimitMiddleware, rateLimits } from "./utils/rateLimit.js";
 import { vercelDatabase } from "./middleware/vercelDatabase.js";
 
@@ -24,7 +24,8 @@ const UPLOAD_PATHS = ["/api/users/:id/documents/:documentType", "/api/stores/log
 export const app = express();
 
 app.disable("x-powered-by");
-app.set("trust proxy", false);
+// Applied here (not only in server.ts) so the Vercel entry point honours TRUST_PROXY too.
+configureTrustProxy(app);
 app.use(securityHeaders);
 app.use(cors);
 // Per-IP ceiling for every API call, applied before body parsing so floods never reach JSON parsing or the database.
@@ -37,8 +38,9 @@ app.use("/api", (request, response, next) => {
   }
   apiIpLimiter(request, response, next);
 });
-// Only base64 upload endpoints (5 MB documents, 2 MB logos) need large bodies; everything else is capped at 1 MB.
-app.use(UPLOAD_PATHS, express.json({ limit: "8mb" }));
+// Only base64 upload endpoints (3 MB documents, 2 MB logos) need large bodies; everything else is capped at 1 MB.
+// 4.5 MB matches Vercel's request-body limit, so local and deployed behaviour agree.
+app.use(UPLOAD_PATHS, express.json({ limit: "4.5mb" }));
 app.use(express.json({ limit: "1mb" }));
 app.use(rejectDangerousKeys);
 app.get("/api/greet", (_request, response) => {

@@ -3,6 +3,7 @@ import { Franchise } from '../models/Franchise.js';
 import { Sale } from '../models/Sale.js';
 import { User } from '../models/User.js';
 import { getVisibleStoreIds } from '../utils/storeAccess.js';
+import { addDaysToDateValue, businessDateValue, businessMonthRange } from '../utils/dateUtils.js';
 import {
   computeExpenseBreakdown,
   computeMonthlyAttrition,
@@ -24,12 +25,9 @@ export async function getDashboardStores(userId: string) {
 // The router must authorize storeObjectId first; this query service does not enforce store access.
 export async function getFranchiseDashboard(storeObjectId: Types.ObjectId, userId: string) {
   const storeCount = (await getVisibleStoreIds(userId)).length;
-  const now = new Date();
-  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const monthFrom = `${monthPrefix}-01`;
-  const monthTo = `${monthPrefix}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`;
-  const yearAgo = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
-  const insightsFrom = `${yearAgo.getFullYear()}-${String(yearAgo.getMonth() + 1).padStart(2, '0')}-${String(yearAgo.getDate()).padStart(2, '0')}`;
+  // Month and look-back bounds follow the India business day, not the server's timezone.
+  const { from: monthFrom, to: monthTo } = businessMonthRange();
+  const insightsFrom = addDaysToDateValue(businessDateValue(), -365);
   const [employeeSummary, monthlySales, employees, sales] = await Promise.all([
     User.countDocuments({
       franchises: storeObjectId,

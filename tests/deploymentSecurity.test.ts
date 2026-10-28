@@ -9,7 +9,7 @@ import { allowedOrigins, configureTrustProxy } from '../src/middleware/securityH
 import { checkRateLimit, rateLimitEntryCount } from '../src/utils/rateLimit.js';
 import { signSessionToken } from '../src/utils/token.js';
 
-const ENV_KEYS = ['NODE_ENV', 'WEB_ORIGINS', 'TRUST_PROXY', 'JWT_SECRET', 'MONGODB_URI', 'MONGODB_DB', 'FIELD_ENCRYPTION_KEY', 'PORT'] as const;
+const ENV_KEYS = ['NODE_ENV', 'VERCEL', 'WEB_ORIGINS', 'TRUST_PROXY', 'JWT_SECRET', 'MONGODB_URI', 'MONGODB_DB', 'FIELD_ENCRYPTION_KEY', 'PORT'] as const;
 const savedEnv = Object.fromEntries(ENV_KEYS.map((key) => [key, process.env[key]]));
 
 function restoreEnv() {
@@ -57,6 +57,15 @@ describe('security headers', () => {
     const response = await fetch(`${baseUrl}/api/does-not-exist`);
     assert.match(response.headers.get('strict-transport-security') ?? '', /max-age=31536000/);
   });
+
+  it('treats every Vercel environment as production for HSTS and CORS', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.VERCEL = '1';
+    delete process.env.WEB_ORIGINS;
+    const response = await fetch(`${baseUrl}/api/does-not-exist`);
+    assert.match(response.headers.get('strict-transport-security') ?? '', /max-age=31536000/);
+    assert.deepEqual(allowedOrigins(), []);
+  });
 });
 
 describe('CORS', () => {
@@ -95,8 +104,25 @@ describe('trust proxy', () => {
   it('is disabled by default so X-Forwarded-For cannot spoof the client IP', () => {
     const target = express();
     delete process.env.TRUST_PROXY;
+    delete process.env.VERCEL;
     configureTrustProxy(target);
     assert.equal(target.get('trust proxy'), false);
+  });
+
+  it('defaults to one hop on Vercel, whose edge overwrites X-Forwarded-For', () => {
+    delete process.env.TRUST_PROXY;
+    process.env.VERCEL = '1';
+    const target = express();
+    configureTrustProxy(target);
+    assert.equal(target.get('trust proxy'), 1);
+
+    // An explicit value still wins and is still validated.
+    process.env.TRUST_PROXY = '0';
+    const disabled = express();
+    configureTrustProxy(disabled);
+    assert.equal(disabled.get('trust proxy'), false);
+    process.env.TRUST_PROXY = 'true';
+    assert.throws(() => configureTrustProxy(express()), /TRUST_PROXY/);
   });
 
   it('accepts only an explicit hop count', () => {
@@ -147,11 +173,11 @@ describe('request body handling', () => {
     assert.equal(response.status, 401);
   });
 
-  it('rejects upload bodies above the 8 MB ceiling', async () => {
+  it('rejects upload bodies above the 4.5 MB ceiling (Vercel request limit)', async () => {
     const response = await fetch(`${baseUrl}/api/stores/logo`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ base64: 'A'.repeat(8_500_000) }),
+      body: JSON.stringify({ base64: 'A'.repeat(4_800_000) }),
     });
     assert.equal(response.status, 413);
   });

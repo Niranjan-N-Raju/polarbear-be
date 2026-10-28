@@ -9,7 +9,7 @@ import { Incentive } from '../src/models/Incentive.js';
 import { PnlInput } from '../src/models/PnlInput.js';
 import { Sale } from '../src/models/Sale.js';
 import { User } from '../src/models/User.js';
-import { localDateValue } from '../src/utils/dateUtils.js';
+import { businessDateValue } from '../src/utils/dateUtils.js';
 import { queryResult, setupFranchiseApi, storeId, otherStoreId, userId } from './helpers/franchiseApi.js';
 
 const call = setupFranchiseApi();
@@ -33,10 +33,11 @@ describe('franchise P&L API', () => {
   });
 
   it('calculates the month with payroll and manual P&L inputs in the Next response shape', async () => {
-    const today = localDateValue();
+    const today = businessDateValue();
     const period = today.slice(0, 7);
     const daysInCycle = new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate();
-    const expectedPayroll = Math.round((30_000 * 2 / daysInCycle) * 100) / 100 + 200 - 500;
+    // Earned salary plus incentives; the 500 advance is a cash-flow item and must not reduce P&L payroll.
+    const expectedPayroll = Math.round((30_000 * 2 / daysInCycle + 200) * 100) / 100;
 
     mock.method(Franchise, 'findById', () => queryResult({
       _id: storeId, name: 'Test Store', salaryCycleType: 'calendar_month', salaryCycleStartDay: 1, salaryCycleEndDay: 31,
@@ -107,6 +108,7 @@ describe('franchise P&L API', () => {
     let updateFilter: Record<string, unknown> = {};
     let updatePayload: Record<string, unknown> = {};
     mock.method(Franchise, 'exists', async () => ({ _id: storeId }));
+    mock.method(PnlInput, 'findOne', () => queryResult({ period: '2026-10', values: new Map([['rent', 100], ['food', 40]]) }));
     mock.method(PnlInput, 'findOneAndUpdate', (filter: Record<string, unknown>, update: Record<string, unknown>) => {
       updateFilter = filter;
       updatePayload = update;
@@ -117,7 +119,8 @@ describe('franchise P&L API', () => {
     });
     assert.equal(saved.status, 200);
     assert.deepEqual(updateFilter, { franchise: storeId, period: '2026-10' });
-    assert.deepEqual(updatePayload.$set, { values: { rent: 300 } });
+    // Values merge per key so fields not sent (food) are preserved.
+    assert.deepEqual(updatePayload.$set, { 'values.rent': 300 });
     assert.deepEqual(await saved.json(), {
       message: 'P&L inputs saved.', input: { period: '2026-10', values: { rent: 300 } },
     });

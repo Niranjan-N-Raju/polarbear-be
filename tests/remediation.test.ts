@@ -6,7 +6,7 @@ import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import { app } from '../src/app.js';
 import { Franchise } from '../src/models/Franchise.js';
-import { InventoryItem } from '../src/models/Inventory.js';
+import { DumpedInventory, InventoryItem } from '../src/models/Inventory.js';
 import { User } from '../src/models/User.js';
 import { contentDisposition, sanitizeFileName } from '../src/routes/franchise-employees.js';
 import {
@@ -219,6 +219,45 @@ describe('R5 — FIFO consumption race is compensated', () => {
     assert.equal(String(filter._id), String(itemId));
     assert.equal(update.$inc.quantity, 2);
     assert.ok(!events.some((event) => event.action === 'inventory.stock.consumed'));
+  });
+
+  it('returns 500 and audits when the compensating refund fails', async () => {
+    actor = franchiseAdmin();
+    const itemId = new mongoose.Types.ObjectId();
+    const productId = new mongoose.Types.ObjectId();
+    const later = new Date(Date.now() + 10 * 86_400_000).toISOString().slice(0, 10);
+    const earlier = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10);
+    let earlierLookups = 0;
+    mock.method(InventoryItem, 'findOne', (query: Record<string, unknown>) => {
+      if (query._id) return queryResult({ _id: itemId, productId, product: 'Milk', quantity: 5, expiryDate: later });
+      earlierLookups += 1;
+      return queryResult(earlierLookups === 1 ? null : { _id: new mongoose.Types.ObjectId(), quantity: 3, expiryDate: earlier });
+    });
+    mock.method(InventoryItem, 'findOneAndUpdate', async () => ({ _id: itemId, productId, product: 'Milk', quantity: 3, expiryDate: later }));
+    mock.method(InventoryItem, 'updateOne', async () => { throw new Error('simulated refund failure'); });
+    mock.method(console, 'error', () => undefined);
+    const events = captureAudit();
+    const response = await call('PATCH', `/inventory?storeId=${storeId}`, { action: 'consume', inventoryItemId: String(itemId), quantity: 2 });
+    assert.equal(response.status, 500);
+    assert.ok(events.some((event) => event.action === 'inventory.compensation.failed'));
+  });
+
+  it('restores the quantity when the dump history write fails', async () => {
+    actor = franchiseAdmin();
+    const itemId = new mongoose.Types.ObjectId();
+    const productId = new mongoose.Types.ObjectId();
+    const item = { _id: itemId, productId, product: 'Milk', quantity: 7, expiryDate: '2020-01-01' };
+    mock.method(InventoryItem, 'findOne', () => queryResult(item));
+    mock.method(InventoryItem, 'findOneAndUpdate', async () => ({ ...item }));
+    mock.method(DumpedInventory, 'create', async () => { throw new Error('simulated history failure'); });
+    const restore = mock.method(InventoryItem, 'updateOne', async () => ({ matchedCount: 1, modifiedCount: 1 }));
+    mock.method(console, 'error', () => undefined);
+    const response = await call('PATCH', `/inventory?storeId=${storeId}`, { action: 'dump', inventoryItemId: String(itemId) });
+    assert.equal(response.status, 500);
+    assert.equal(restore.mock.callCount(), 1);
+    const [filter, update] = restore.mock.calls[0]!.arguments as unknown as [Record<string, unknown>, { $set: { quantity: number } }];
+    assert.equal(filter.quantity, 0);
+    assert.equal(update.$set.quantity, 7);
   });
 });
 

@@ -11,6 +11,7 @@ import { Advance } from '../src/models/Advance.js';
 import { ExtraDay } from '../src/models/ExtraDay.js';
 import { Incentive } from '../src/models/Incentive.js';
 import { Attendance } from '../src/models/Attendance.js';
+import { AttendanceRemoval } from '../src/models/AttendanceRemoval.js';
 import { MAX_MONEY_AMOUNT, MAX_STOCK_QUANTITY } from '../src/utils/businessLimits.js';
 import { otherStoreId, queryResult, setupFranchiseApi, storeId, userId } from './helpers/franchiseApi.js';
 
@@ -268,6 +269,8 @@ describe('business logic: attendance', () => {
     mock.method(User, 'find', () => queryResult([{ _id: employeeId, isActive: true, dateOfJoining: new Date('2025-01-01') }]));
     let operations: unknown[] = [];
     mock.method(Attendance, 'bulkWrite', async (ops: unknown[]) => { operations = ops; });
+    mock.method(Attendance, 'find', () => queryResult([{ employee: employeeId, status: 'Absent' }]));
+    const clearedRemovals = mock.method(AttendanceRemoval, 'deleteMany', async () => ({ deletedCount: 0 }));
     const response = await call('PUT', '/attendance', {
       storeId: String(storeId), date: '2026-01-05',
       records: [{ employeeId: String(employeeId), status: 'Present' }, { employeeId: String(foreign), status: 'Present' }],
@@ -278,5 +281,8 @@ describe('business logic: attendance', () => {
     assert.ok(event);
     const records = (event.metadata as { after: { records: { employeeId: string }[] } }).after.records;
     assert.deepEqual(records.map((record) => String(record.employeeId)), [String(employeeId)]);
+    // Previous statuses are audited as 'before', and an explicit mark clears any recorded removal.
+    assert.deepEqual((event.metadata as { before: { records: unknown[] } }).before.records, [{ employeeId: String(employeeId), status: 'Absent' }]);
+    assert.equal(clearedRemovals.mock.callCount(), 1);
   });
 });

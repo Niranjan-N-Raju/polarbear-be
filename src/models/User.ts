@@ -93,6 +93,8 @@ const userSchema = new Schema<UserRecord>(
   { timestamps: true, autoIndex: false },
 );
 
+// Matches the Next.js schema's `unique: true` (index name email_1); created via `npm run db:sync-indexes`.
+userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ franchises: 1 });
 userSchema.index({ createdBy: 1 });
 userSchema.index({ role: 1 });

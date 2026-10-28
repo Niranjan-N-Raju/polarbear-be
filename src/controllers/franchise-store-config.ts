@@ -8,6 +8,7 @@ import { DEFAULT_POSITION_OPTIONS } from '../utils/employeePositions.js';
 import { decodeBase64Upload, detectAllowedUploadType, getBucket } from '../utils/fileUpload.js';
 import { bodyRecord, isFranchiseAdmin } from '../utils/franchiseRoute.js';
 import { getCycleRange, isValidPeriod, resolveCycleSettings } from '../utils/salaryCycle.js';
+import { auditMutation } from '../utils/businessLimits.js';
 export async function getStoresBranding(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await getStoreId(request, response);
@@ -23,9 +24,10 @@ export async function putStoresBranding(request: Request, response: Response, ne
   if (!name || name.length > 100) { response.status(400).json({ message: 'Enter a valid store name.' }); return; }
   const storeId = await getStoreId(request, response);
   if (!storeId) return;
-  const store = await Franchise.findOneAndUpdate({ _id: storeId }, { $set: { name } }, { new: true, runValidators: true }).lean();
-  if (!store) { response.status(404).json({ message: 'Store not found.' }); return; }
-  response.json({ message: 'Store name updated.', store: { name: store.name } });
+  const previous = await Franchise.findOneAndUpdate({ _id: storeId }, { $set: { name } }, { new: false, runValidators: true }).lean();
+  if (!previous) { response.status(404).json({ message: 'Store not found.' }); return; }
+  auditMutation(request, 'store.branding.updated', { storeId, targetId: storeId, before: { name: previous.name }, after: { name } });
+  response.json({ message: 'Store name updated.', store: { name } });
 }
 
 export async function getStoresLogo(request: Request, response: Response, next: NextFunction) {
@@ -80,6 +82,7 @@ export async function postStoresLogo(request: Request, response: Response, next:
     throw error;
   }
   if (previousFileId) await bucket.delete(previousFileId).catch(() => undefined);
+  auditMutation(request, 'store.logo.uploaded', { storeId, targetId: storeId, after: { contentType, size: decoded.length, replaced: Boolean(previousFileId) } });
   response.json({ message: 'Logo uploaded successfully.' });
 }
 
@@ -93,6 +96,7 @@ export async function deleteStoresLogo(request: Request, response: Response, nex
   target.logo = undefined;
   await target.save();
   if (previousFileId) await getBucket('storeLogos').delete(previousFileId).catch(() => undefined);
+  auditMutation(request, 'store.logo.deleted', { storeId, targetId: storeId, before: { hadLogo: Boolean(previousFileId) } });
   response.json({ message: 'Logo removed.' });
 }
 
@@ -119,16 +123,23 @@ export async function putStoresCycle(request: Request, response: Response, next:
   }
   const storeId = await getStoreId(request, response);
   if (!storeId) return;
-  const saved = await Franchise.findOneAndUpdate({ _id: storeId }, {
+  const endDay = cycleType === 'calendar_month' ? 31 : Number(startDay) - 1;
+  const previous = await Franchise.findOneAndUpdate({ _id: storeId }, {
     $set: {
       salaryCycleType: cycleType,
       salaryCycleStartDay: startDay,
-      salaryCycleEndDay: cycleType === 'calendar_month' ? 31 : Number(startDay) - 1,
+      salaryCycleEndDay: endDay,
       salaryCycleConfiguredAt: new Date(),
     }
-  }, { new: true, runValidators: true }).lean();
-  if (!saved) { response.status(404).json({ message: 'Store not found.' }); return; }
-  response.json({ message: 'Salary cycle updated.', cycle: { startDay: saved.salaryCycleStartDay, endDay: saved.salaryCycleEndDay } });
+  }, { new: false, runValidators: true }).lean();
+  if (!previous) { response.status(404).json({ message: 'Store not found.' }); return; }
+  auditMutation(request, 'salary.cycle.updated', {
+    storeId,
+    targetId: storeId,
+    before: { cycleType: previous.salaryCycleType, startDay: previous.salaryCycleStartDay, endDay: previous.salaryCycleEndDay },
+    after: { cycleType, startDay, endDay },
+  });
+  response.json({ message: 'Salary cycle updated.', cycle: { startDay: Number(startDay), endDay } });
 }
 
 export async function getStoresPositions(request: Request, response: Response, next: NextFunction) {
@@ -157,8 +168,10 @@ export async function putStoresPositions(request: Request, response: Response, n
   if (removed.length && await User.exists({ franchises: storeId, role: 'employee', position: { $in: removed } })) {
     response.status(409).json({ message: 'A position is assigned to an employee. Reassign those employees before removing it.' }); return;
   }
+  const previousPositions = [...(store.positions ?? DEFAULT_POSITION_OPTIONS)];
   store.positions = positions;
   await store.save();
+  auditMutation(request, 'store.positions.updated', { storeId, targetId: storeId, before: { positions: previousPositions }, after: { positions } });
   response.json({ message: 'Position options saved.', positions: store.positions });
 }
 
@@ -194,7 +207,9 @@ export async function putStoresShifts(request: Request, response: Response, next
   if (removed.length && await WeeklyRoster.exists({ franchise: storeId, 'entries.days.shift': { $in: removed } })) {
     response.status(409).json({ message: 'A shift is used in a saved weekly roster. Change those rosters before removing it.' }); return;
   }
+  const previousShifts = (store.shifts ?? []).map((shift) => ({ id: shift.id, name: shift.name, startTime: shift.startTime, endTime: shift.endTime }));
   store.shifts = shifts;
   await store.save();
+  auditMutation(request, 'store.shifts.updated', { storeId, targetId: storeId, before: { shifts: previousShifts }, after: { shifts } });
   response.json({ message: 'Store shifts saved.', shifts: store.shifts });
 }

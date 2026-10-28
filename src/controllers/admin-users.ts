@@ -7,7 +7,7 @@ import { User } from '../models/User.js';
 import { ADMIN_USER_PROJECTION, adminUserView, pageValue } from '../services/admin-users.js';
 import { clampPage, escapeRegex, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
 
-import { auditLog } from '../utils/audit.js';
+import { auditLog, emailHashPrefix } from '../utils/audit.js';
 import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
 import { bodyTooLarge } from '../utils/requestBody.js';
 import { createUserSchema, firstValidationMessage, passwordSchema, patchUserSchema } from '../utils/validation.js';
@@ -64,6 +64,14 @@ export async function postUsers(request: Request, response: Response) {
       return;
     }
   } else {
+    // An admin-supplied employee password enables a real login, so it must meet the same policy.
+    if (password) {
+      const passwordResult = passwordSchema.safeParse(password);
+      if (!passwordResult.success) {
+        response.status(400).json({ message: firstValidationMessage(passwordResult.error) });
+        return;
+      }
+    }
     email = email || `emp_${randomBytes(12).toString('hex')}@nologin.internal`;
     password = password || randomBytes(32).toString('hex');
   }
@@ -101,6 +109,7 @@ export async function postUsers(request: Request, response: Response) {
     isActive: true,
     createdBy: new mongoose.Types.ObjectId(auth.id),
     franchises: role === 'sub_admin' ? [] : franchiseIds,
+    ...(body.phone ? { phone: body.phone } : {}),
     // The creating admin knows this password, so the user must replace it before using the app.
     mustChangePassword: true,
   });
@@ -109,7 +118,7 @@ export async function postUsers(request: Request, response: Response) {
     actorRole: auth.role,
     targetId: String(user._id),
     ip: request.ip,
-    metadata: { role, email },
+    metadata: { role, emailHash: emailHashPrefix(email) },
   });
   response.status(201).json({
     message: 'User created successfully.',
@@ -220,7 +229,7 @@ export async function deleteUsersId(request: Request<{ id: string; }>, response:
     response.status(400).json({ message: 'You cannot delete your own account.' });
     return;
   }
-  const target = await User.findById(id).select('_id role isActive archivedAt');
+  const target = await User.findById(id).select('_id role isActive archivedAt sessionVersion');
   if (!target) {
     response.status(404).json({ message: 'User not found.' });
     return;
@@ -239,9 +248,13 @@ export async function deleteUsersId(request: Request<{ id: string; }>, response:
     return;
   }
 
-  await target.deleteOne();
-  auditLog('user.deleted', { actorId: auth.id, actorRole: auth.role, targetId: id, ip: request.ip });
-  response.json({ message: 'User deleted.' });
+  // Non-employee accounts are archived (not hard-deleted) so audit history and references stay intact.
+  target.isActive = false;
+  target.archivedAt = new Date();
+  target.sessionVersion = (target.sessionVersion ?? 0) + 1;
+  await target.save();
+  auditLog('user.archived', { actorId: auth.id, actorRole: auth.role, targetId: id, ip: request.ip, metadata: { role: target.role } });
+  response.json({ message: 'User archived.' });
 }
 
 export async function userListResponse(

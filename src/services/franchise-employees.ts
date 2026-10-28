@@ -1,10 +1,12 @@
 import { type Request, type Response } from 'express';
 import mongoose from 'mongoose';
 import { User, type UserDocumentFile, type UserRecord } from '../models/User.js';
-import { decryptUserFields } from '../utils/crypto.js';
+import { decryptUserFields, ENCRYPTED_USER_FIELDS } from '../utils/crypto.js';
+import { businessDateValue } from '../utils/dateUtils.js';
 import { bodyRecord, stringQuery } from '../utils/franchiseRoute.js';
 import { authorizeStore, isDateValue } from '../utils/storeAccess.js';
-export const MAX_FILE_SIZE = 5 * 1024 * 1024;
+// Base64 inflates 3 MB to ~4 MB, which with the JSON wrapper stays under Vercel's 4.5 MB request limit.
+export const MAX_FILE_SIZE = 3 * 1024 * 1024;
 export const documentFields = { aadhar: 'aadharDocument', pan: 'panDocument' } as const;
 export type DocumentType = keyof typeof documentFields;
 export type UserWithDocuments = mongoose.HydratedDocument<UserRecord> & { aadharDocument?: UserDocumentFile; panDocument?: UserDocumentFile; };
@@ -16,11 +18,9 @@ export function getDocumentType(value: string): DocumentType | null {
   return value === 'aadhar' || value === 'pan' ? value : null;
 }
 export function isAdultDate(value: string) {
-  const date = new Date(`${value}T00:00:00`);
-  const cutoff = new Date();
-  cutoff.setHours(0, 0, 0, 0);
-  cutoff.setFullYear(cutoff.getFullYear() - 18);
-  return date <= cutoff;
+  const today = businessDateValue();
+  const cutoff = `${String(Number(today.slice(0, 4)) - 18).padStart(4, '0')}${today.slice(4)}`;
+  return value <= cutoff;
 }
 export const INTERNAL_USER_FIELDS = ['password', 'sessionVersion', 'createdBy', '__v'] as const;
 export function documentSummary(value: unknown) {
@@ -83,6 +83,10 @@ export function parseEmployee(body: Record<string, unknown>, requireName = true)
   for (const field of textFields) {
     const value = body[field];
     if (value !== undefined && value !== null && typeof value !== 'string') return { error: `Invalid ${field}.` };
+    // The "enc:" prefix marks stored ciphertext; accepting it as input would skip encryption and break reads.
+    if (typeof value === 'string' && (ENCRYPTED_USER_FIELDS as readonly string[]).includes(field) && value.trim().toLowerCase().startsWith('enc:')) {
+      return { error: `Invalid ${field}.` };
+    }
   }
   const value: Record<string, unknown> = {};
   if (typeof body.name === 'string') value.name = body.name.trim();

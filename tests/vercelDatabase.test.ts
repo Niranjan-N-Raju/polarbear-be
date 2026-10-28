@@ -4,7 +4,8 @@ import type { Server } from "node:http";
 import { after, afterEach, before, beforeEach, it, mock } from "node:test";
 import mongoose from "mongoose";
 import { app } from "../src/app.js";
-import { connectToDatabase } from "../src/config/database.js";
+import { CONNECTION_FAILURE_COOLDOWN_MS, connectToDatabase, resetDatabaseCooldownForTests } from "../src/config/database.js";
+import { loadConfig } from "../src/config/env.js";
 import type { AppConfig } from "../src/config/env.js";
 import { decrypt, encryptField, isEncrypted } from "../src/utils/crypto.js";
 
@@ -38,6 +39,9 @@ beforeEach(() => {
   process.env.MONGODB_DB = config.mongoDatabase;
   process.env.JWT_SECRET = config.jwtSecret;
   process.env.PORT = "4000";
+  // Every Vercel environment is treated as production-like, so an encryption key is always required.
+  process.env.FIELD_ENCRYPTION_KEY = "b".repeat(64);
+  resetDatabaseCooldownForTests();
 });
 
 afterEach(() => mock.restoreAll());
@@ -76,19 +80,31 @@ it("connects before health checks and authentication routing on Vercel", async (
   assert.equal(connect.mock.callCount(), 1);
 });
 
-it("reports failures without leaking details and retries on the next request", async () => {
+it("reports failures without leaking details, fails fast during the cooldown, then retries", async () => {
   const log = mock.method(console, "error", () => {});
   const connect = mock.method(mongoose, "connect", async () => { throw new Error("private connection details"); });
   const health = await fetch(`${baseUrl}/health`);
   assert.equal(health.status, 503);
   assert.deepEqual(await health.json(), { status: "unavailable", database: "disconnected" });
+  // Within the cooldown the next request fails immediately without another connection attempt.
   const login = await fetch(`${baseUrl}/auth/login`, { method: "POST" });
   assert.equal(login.status, 503);
   assert.deepEqual(await login.json(), { message: "Database unavailable. Please try again later." });
-  assert.equal(connect.mock.callCount(), 2);
+  assert.equal(connect.mock.callCount(), 1);
   assert.ok(!JSON.stringify(log.mock.calls).includes("private connection details"));
+  const realNow = Date.now();
+  mock.method(Date, "now", () => realNow + CONNECTION_FAILURE_COOLDOWN_MS + 1);
   connect.mock.mockImplementation(async () => { state = 1; return mongoose; });
   assert.equal((await fetch(`${baseUrl}/health`)).status, 200);
+  assert.equal(connect.mock.callCount(), 2);
+});
+
+it("requires FIELD_ENCRYPTION_KEY on any Vercel environment, not only NODE_ENV=production", () => {
+  process.env.NODE_ENV = "development";
+  process.env.FIELD_ENCRYPTION_KEY = "";
+  assert.throws(() => loadConfig(), /FIELD_ENCRYPTION_KEY/);
+  delete process.env.VERCEL;
+  assert.equal(loadConfig().mongoDatabase, config.mongoDatabase);
 });
 
 it("keeps the public greeting independent of MongoDB", async () => {

@@ -12,6 +12,8 @@ import { decodeBase64Upload, detectAllowedUploadType, getBucket } from '../utils
 import { bodyRecord, isFranchiseAdmin, stringQuery } from '../utils/franchiseRoute.js';
 import { clampPage, escapeRegex, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
 import { isDateValue } from '../utils/storeAccess.js';
+import { auditMutation } from '../utils/businessLimits.js';
+import { addDaysToDateValue, businessDateValue, businessDayStart } from '../utils/dateUtils.js';
 export async function getUsers(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await resolveStore(request, response);
@@ -77,6 +79,8 @@ export async function postUsers(request: Request, response: Response, next: Next
     ...parsed.value, email, password: await bcrypt.hash(randomBytes(32).toString('hex'), 12),
     role: 'employee', isActive: true, createdBy: new mongoose.Types.ObjectId(request.auth!.id), franchises: [storeId],
   });
+  // Audit field names only; employee PII values are never logged.
+  auditMutation(request, 'employee.created', { storeId, targetId: user._id, after: { fields: Object.keys(parsed.value ?? {}) } });
   response.status(201).json({ message: 'Employee created successfully.', user: { _id: String(user._id) } });
 }
 
@@ -100,6 +104,7 @@ export async function patchUsersId(request: Request, response: Response, next: N
   if (Object.keys(update).length === 0) { response.status(400).json({ message: 'No fields to update.' }); return; }
   Object.assign(target, update);
   const saved = await target.save();
+  auditMutation(request, 'employee.updated', { storeId, targetId: target._id, after: { fields: Object.keys(update) } });
   const result = safeUser(saved.toObject() as unknown as Record<string, unknown>);
   response.json({ message: 'User updated.', user: result });
 }
@@ -114,6 +119,7 @@ export async function putUsersId(request: Request, response: Response, next: Nex
   target.archivedAt = undefined;
   target.sessionVersion = (target.sessionVersion ?? 0) + 1;
   await target.save();
+  auditMutation(request, 'employee.unarchived', { storeId, targetId: target._id, after: { isActive: true } });
   response.json({ message: 'Employee unarchived.' });
 }
 
@@ -125,19 +131,20 @@ export async function deleteUsersId(request: Request, response: Response, next: 
   const target = await targetForStore(String(request.params.id), storeId);
   if (!target) { response.status(404).json({ message: 'Employee not found.' }); return; }
   const exitDate = bodyRecord(request).exitDate;
-  let archivedAt = new Date();
+  const todayValue = businessDateValue();
+  // archivedAt is the first inactive instant; without an exit date, today (the archive day) is still
+  // worked and paid, so the employee becomes inactive from the start of the next India business day.
+  let archivedAt = businessDayStart(addDaysToDateValue(todayValue, 1));
   if (exitDate !== undefined) {
     if (!isDateValue(exitDate)) { response.status(400).json({ message: 'A valid exit date is required.' }); return; }
-    const today = new Date();
-    const todayValue = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     if (exitDate > todayValue) { response.status(400).json({ message: 'Exit date cannot be in the future.' }); return; }
-    archivedAt = new Date(`${exitDate}T00:00:00.000Z`);
-    archivedAt.setUTCDate(archivedAt.getUTCDate() + 1);
+    archivedAt = businessDayStart(addDaysToDateValue(exitDate, 1));
   }
   target.isActive = false;
   target.archivedAt = archivedAt;
   target.sessionVersion = (target.sessionVersion ?? 0) + 1;
   await target.save();
+  auditMutation(request, 'employee.archived', { storeId, targetId: target._id, after: { archivedAt: archivedAt.toISOString(), exitDate: typeof exitDate === 'string' ? exitDate : undefined } });
   response.json({ message: 'Employee archived.' });
 }
 
@@ -149,7 +156,7 @@ export async function postUsersIdDocumentsDocumentType(request: Request, respons
   if (!storeId) return;
   const body = bodyRecord(request);
   const bytes = decodeBase64Upload(body.base64 ?? body.file ?? body.data, MAX_FILE_SIZE);
-  if (!bytes) { response.status(400).json({ message: 'Document request is invalid or too large.' }); return; }
+  if (!bytes) { response.status(400).json({ message: 'Document request is invalid or larger than 3 MB.' }); return; }
   const contentType = detectAllowedUploadType(bytes);
   if (!contentType || !SAFE_DOCUMENT_TYPES.has(contentType)) {
     response.status(400).json({ message: 'Only valid PDF, JPEG, and PNG files are allowed.' }); return;
@@ -172,6 +179,7 @@ export async function postUsersIdDocumentsDocumentType(request: Request, respons
     throw error;
   }
   if (previous?.fileId) await bucket.delete(previous.fileId).catch(() => undefined);
+  auditMutation(request, 'document.uploaded', { storeId, targetId: request.params.id, after: { documentType: type, contentType, size: bytes.length, replaced: Boolean(previous?.fileId) } });
   response.json({ document: { fileName, contentType, size: bytes.length } });
 }
 
@@ -189,6 +197,7 @@ export async function getUsersIdDocumentsDocumentType(request: Request, response
     const chunks: Buffer[] = [];
     for await (const chunk of getBucket('employeeDocuments').openDownloadStream(metadata.fileId)) chunks.push(Buffer.from(chunk));
     const bytes = decryptBuffer(Buffer.concat(chunks));
+    auditMutation(request, 'document.read', { storeId, targetId: request.params.id, after: { documentType: type } });
     response.setHeader('Cache-Control', 'private, no-store');
     response.setHeader('Content-Type', SAFE_DOCUMENT_TYPES.has(metadata.contentType) ? metadata.contentType : 'application/octet-stream');
     response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -212,5 +221,6 @@ export async function deleteUsersIdDocumentsDocumentType(request: Request, respo
   target.set(field, undefined);
   await target.save();
   await getBucket('employeeDocuments').delete(metadata.fileId).catch(() => undefined);
+  auditMutation(request, 'document.deleted', { storeId, targetId: request.params.id, before: { documentType: type } });
   response.json({ message: 'Document removed.' });
 }

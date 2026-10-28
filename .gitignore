@@ -4,4 +4,5 @@ dist/
 .env.*
 !.env.example
 *.log
+/production-repro-tests/
 .DS_Store
