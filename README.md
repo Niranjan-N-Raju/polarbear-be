@@ -27,6 +27,21 @@ npm start
 
 Run commands from this project's root. `npm test` runs the backend unit tests with Node's built-in test runner; tests do not require a database. `npm run dev` reloads TypeScript changes; `npm start` runs the compiled output after a build.
 
+### Dashboard module boundaries
+
+- `src/routes/franchise-dashboard.ts` handles dashboard/store HTTP routing and
+  authorization, composing the separate `franchise-sales.ts` router for existing
+  sales endpoints. `admin-dashboard.ts` retains administrator access checks.
+- `src/services/dashboard.ts` owns dashboard queries and response composition;
+  `src/services/sales.ts` owns the bounded sales-list query. Services accept
+  already-authorized store IDs; do not expose them directly without route-level
+  authorization.
+- `src/utils/dashboardInsights.ts` contains pure chart calculations.
+  `src/utils/saleTotals.ts` provides shared derived totals for sale reads and
+  writes, preserving stored legacy totals when present.
+
+API paths, response shapes, validation, auditing, and rate limits are unchanged.
+
 ### Vercel entry point
 
 `src/app.ts` exports the Express application as both a default export for

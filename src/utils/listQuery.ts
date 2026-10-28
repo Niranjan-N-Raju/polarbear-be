@@ -11,3 +11,7 @@ export function isSearchTooLong(value: unknown): boolean {
 export function clampPage(page: number): number {
   return Math.min(MAX_PAGE, page);
 }
+
+export function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
