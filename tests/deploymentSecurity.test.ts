@@ -74,10 +74,13 @@ describe('CORS', () => {
     process.env.WEB_ORIGINS = 'https://app.example.test';
     const allowed = await fetch(`${baseUrl}/api/does-not-exist`, { headers: { Origin: 'https://app.example.test' } });
     assert.equal(allowed.headers.get('access-control-allow-origin'), 'https://app.example.test');
+    assert.equal(allowed.headers.get('access-control-allow-credentials'), 'true');
+    assert.match(allowed.headers.get('access-control-allow-headers') ?? '', /X-Web-Session/);
     assert.match(allowed.headers.get('vary') ?? '', /Origin/);
 
     const denied = await fetch(`${baseUrl}/api/does-not-exist`, { headers: { Origin: 'https://evil.example.test' } });
     assert.equal(denied.headers.get('access-control-allow-origin'), null);
+    assert.equal(denied.headers.get('access-control-allow-credentials'), null);
     assert.match(denied.headers.get('vary') ?? '', /Origin/);
   });
 

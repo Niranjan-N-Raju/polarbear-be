@@ -100,6 +100,17 @@ origins separated by commas. Leave it unset or empty for a native-only deploymen
 native iOS/Android requests do not require CORS.
 CORS is already handled by the API; do not enable wildcard origins.
 
+Browser session restoration requires credentialed requests with
+`X-Web-Session: 1` from an allowlisted or same-origin frontend. Login, session
+extension, and profile updates set an HTTP-only cookie scoped to `/api/auth`.
+`POST /api/auth/session` validates that cookie against token expiry and the
+current account before returning the session. Other API routes still require
+bearer authentication. `DELETE /api/auth/session` clears the browser cookie;
+`POST /api/auth/logout` also revokes the account's existing tokens.
+Production cookies require HTTPS. Prefer serving the frontend and API on the
+same site (or proxy `/api` through the frontend), since browsers may block
+cross-site cookies even with `SameSite=None; Secure`. Native clients are unchanged.
+
 ## Demo data
 
 `npm run seed:demo` previews 18 demo stores and 18 demo users without changing the database. To insert missing demo records into the configured MongoDB database, run:

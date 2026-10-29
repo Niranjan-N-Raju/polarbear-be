@@ -57,7 +57,8 @@ export const cors: RequestHandler = (request, response, next) => {
   if (origin && allowedOrigins().includes(origin)) {
     response.setHeader('Access-Control-Allow-Origin', origin);
     response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Web-Session');
+    response.setHeader('Access-Control-Allow-Credentials', 'true');
     response.setHeader('Access-Control-Max-Age', '600');
   }
   response.append('Vary', 'Origin');

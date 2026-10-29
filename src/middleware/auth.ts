@@ -22,6 +22,7 @@ const PASSWORD_CHANGE_ALLOWED = new Set([
   'PATCH /api/me',
   'POST /api/auth/logout',
   'POST /api/auth/extend',
+  'POST /api/auth/session',
 ]);
 
 function routeKey(request: Request): string {

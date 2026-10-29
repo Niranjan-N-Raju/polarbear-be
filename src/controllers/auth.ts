@@ -12,6 +12,7 @@ import {
 } from "../utils/rateLimit.js";
 import { SESSION_ABSOLUTE_MAX_SECONDS, signSessionToken } from "../utils/token.js";
 import { auditLog, emailHashPrefix } from "../utils/audit.js";
+import { clearWebSession, saveWebSession } from '../utils/webSession.js';
 export async function postLogin(request: Request, response: Response) {
   // request.ip honours only the configured TRUST_PROXY hop count (1 by default on Vercel, whose edge
   // overwrites X-Forwarded-For), so clients cannot spoof their address via that header.
@@ -95,6 +96,7 @@ export async function postLogin(request: Request, response: Response) {
       sessionVersion: user.sessionVersion,
     });
     auditLog("auth.login.succeeded", { actorId: user._id.toString(), actorRole: user.role, ip, metadata: { emailHash: emailHashPrefix(normalizedEmail) } });
+    saveWebSession(request, response, token);
     response.status(200).json({
       message: "Login successful.",
       token,
@@ -136,7 +138,30 @@ export async function postExtend(request: Request, response: Response) {
     sessionStart: user.sessionStart,
   });
   auditLog('auth.session.extended', { actorId: user.id, actorRole: user.role, ip: request.ip });
+  saveWebSession(request, response, token);
   response.json({ message: 'Session extended.', token });
+}
+
+export async function postSession(request: Request, response: Response) {
+  const user = await mongoose.connection.collection('users').findOne({
+    _id: new mongoose.Types.ObjectId(request.auth!.id),
+    isActive: { $ne: false },
+  }, { projection: { name: 1, email: 1, role: 1, mustChangePassword: 1, preferredLanguage: 1, sessionVersion: 1 } });
+  if (!user || (user.sessionVersion ?? 0) !== request.auth!.sessionVersion) {
+    response.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+  response.json({
+    token: request.headers.authorization!.slice('Bearer '.length),
+    user: {
+      id: String(user._id),
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      mustChangePassword: user.mustChangePassword === true,
+      preferredLanguage: user.preferredLanguage ?? 'en',
+    },
+  });
 }
 
 export async function postLogout(request: Request, response: Response) {
@@ -147,5 +172,6 @@ export async function postLogout(request: Request, response: Response) {
     { $inc: { sessionVersion: 1 } },
   );
   auditLog('auth.logout', { actorId: request.auth!.id, actorRole: request.auth!.role, ip: request.ip });
+  clearWebSession(request, response);
   response.json({ message: 'Logged out.' });
 }

@@ -4,6 +4,7 @@ import { User } from '../models/User.js';
 import { auditLog } from '../utils/audit.js';
 import { checkRateLimit, rateLimits } from '../utils/rateLimit.js';
 import { signSessionToken } from '../utils/token.js';
+import { saveWebSession } from '../utils/webSession.js';
 import { firstValidationMessage, passwordSchema, profileSchema } from '../utils/validation.js';
 
 export async function get(request: Request, response: Response) {
@@ -108,5 +109,6 @@ export async function patch(request: Request, response: Response) {
     // A password change starts a new session; other edits keep the original 24h absolute limit.
     ...(newPassword !== undefined ? {} : { sessionStart: auth.sessionStart }),
   });
+  saveWebSession(request, response, token);
   response.json({ message: 'Profile updated', token, mustChangePassword: user.mustChangePassword === true });
 }
