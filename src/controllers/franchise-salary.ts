@@ -48,16 +48,17 @@ export async function getSalary(request: Request, response: Response, next: Next
     const absentDays = elapsedDates.filter((date) => records.get(date) === 'Absent').length;
     const weekOffDays = elapsedDates.filter((date) => records.get(date) === 'Week Off').length;
     const missingDays = elapsedDates.filter((date) => !records.has(date)).length;
-    const employeeIncentives = (incentivesByEmployee.get(employeeId) ?? []).map((item: any) => ({ id: id(item._id), type: item.type, amount: number(item.amount) }));
+    const employeeIncentives = (incentivesByEmployee.get(employeeId) ?? []).map((item: any) => ({ id: id(item._id), type: item.type, amount: number(item.amount), paidEarly: item.paidEarly === true }));
     const employeeExtraDays = (extraDaysByEmployee.get(employeeId) ?? []).map((item: any) => ({ id: id(item._id), type: item.type, days: number(item.days) }));
     const employeeAdvances = (advancesByEmployee.get(employeeId) ?? []).map((item: any) => ({ id: id(item._id), type: item.type, amount: number(item.amount) }));
     const incentiveTotal = roundCurrency(employeeIncentives.reduce((sum, item) => sum + item.amount, 0));
+    const paidEarlyIncentiveTotal = roundCurrency(employeeIncentives.reduce((sum, item) => sum + (item.paidEarly ? item.amount : 0), 0));
     const extraDaysTotal = employeeExtraDays.reduce((sum, item) => sum + item.days, 0);
     const advanceTotal = roundCurrency(employeeAdvances.reduce((sum, item) => sum + item.amount, 0));
     const salary = number(employee.salary);
     // Prorate against the full cycle, not just employment-eligible dates.
     // Projection adds future eligible days; earned pay only includes recorded paid days and adjustments.
-    return { employeeId, name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', salary, paidDays, absentDays, weekOffDays, missingDays, futureDays, eligibleDays: eligibleDates.length, incentives: employeeIncentives, incentiveTotal, extraDays: employeeExtraDays, extraDaysTotal, advances: employeeAdvances, advanceTotal, earnedSalary: roundCurrency((salary * (paidDays + extraDaysTotal)) / cycleDates.length + incentiveTotal - advanceTotal), projectedSalary: roundCurrency((salary * (paidDays + futureDays + extraDaysTotal)) / cycleDates.length + incentiveTotal - advanceTotal) };
+    return { employeeId, name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', salary, paidDays, absentDays, weekOffDays, missingDays, futureDays, eligibleDays: eligibleDates.length, incentives: employeeIncentives, incentiveTotal, paidEarlyIncentiveTotal, extraDays: employeeExtraDays, extraDaysTotal, advances: employeeAdvances, advanceTotal, earnedSalary: roundCurrency((salary * (paidDays + extraDaysTotal)) / cycleDates.length + incentiveTotal - advanceTotal - paidEarlyIncentiveTotal), projectedSalary: roundCurrency((salary * (paidDays + futureDays + extraDaysTotal)) / cycleDates.length + incentiveTotal - advanceTotal - paidEarlyIncentiveTotal) };
   });
   response.json({ store: { id: id(store._id), name: store.name }, cycle: { configured: Boolean(store.salaryCycleConfiguredAt), type: cycleType, startDay, endDay, ...range, totalDays: cycleDates.length }, projections });
 }
@@ -106,7 +107,7 @@ export async function getSalarySlip(request: Request, response: Response, next: 
   const elapsedDates = payableDates.filter((date) => date <= today);
   const [attendance, incentives, extraDays, advances] = await Promise.all([
     Attendance.find({ franchise: storeId, employee: employeeId, date: { $gte: range.from, $lte: range.to } }).select('date status').lean(),
-    Incentive.find({ franchise: storeId, employee: employeeId, period }).select('type amount').lean(),
+    Incentive.find({ franchise: storeId, employee: employeeId, period }).select('type amount paidEarly').lean(),
     ExtraDay.find({ franchise: storeId, employee: employeeId, period }).select('type days').lean(),
     Advance.find({ franchise: storeId, employee: employeeId, period }).select('type amount').lean(),
   ]);
@@ -117,10 +118,11 @@ export async function getSalarySlip(request: Request, response: Response, next: 
   const paidDays = presentDays + weekOffDays;
   const extraDaysTotal = extraDays.reduce((sum: number, item: any) => sum + number(item.days), 0);
   const incentiveTotal = roundCurrency(incentives.reduce((sum: number, item: any) => sum + number(item.amount), 0));
+  const paidEarlyIncentiveTotal = roundCurrency(incentives.reduce((sum: number, item: any) => sum + (item.paidEarly === true ? number(item.amount) : 0), 0));
   const advanceTotal = roundCurrency(advances.reduce((sum: number, item: any) => sum + number(item.amount), 0));
   const basicSalary = roundCurrency((number(employee.salary) * (paidDays + extraDaysTotal)) / cycleDates.length);
-  const netPay = roundCurrency(basicSalary + incentiveTotal - advanceTotal);
-  response.json({ store: { name: store.name, address: store.address ?? '', phone: store.phone ?? '', logoUrl: store.logo?.fileId ? `/api/stores/logo?storeId=${id(storeId)}` : '' }, period, periodLabel: new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(`${period}-01T00:00:00`)), employee: { name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', bankName: employee.bankName ?? '', bankAccountNumber: employee.bankAccountNumber ?? '', bankIfsc: employee.bankIfsc ?? '', panNumber: employee.panNumber ?? '' }, attendance: { totalWorkingDays: payableDates.length, presentDays, weekOffDays, absentDays, extraDays: extraDays.map((item: any) => ({ type: item.type, days: item.days })), extraDaysTotal }, earnings: { basicSalary, grossEarnings: basicSalary }, deductions: { advances, advanceTotal, totalDeductions: advanceTotal }, incentives, incentiveTotal, netPay });
+  const netPay = roundCurrency(basicSalary + incentiveTotal - advanceTotal - paidEarlyIncentiveTotal);
+  response.json({ store: { name: store.name, address: store.address ?? '', phone: store.phone ?? '', logoUrl: store.logo?.fileId ? `/api/stores/logo?storeId=${id(storeId)}` : '' }, period, periodLabel: new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(`${period}-01T00:00:00`)), employee: { name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', bankName: employee.bankName ?? '', bankAccountNumber: employee.bankAccountNumber ?? '', bankIfsc: employee.bankIfsc ?? '', panNumber: employee.panNumber ?? '' }, attendance: { totalWorkingDays: payableDates.length, presentDays, weekOffDays, absentDays, extraDays: extraDays.map((item: any) => ({ type: item.type, days: item.days })), extraDaysTotal }, earnings: { basicSalary, grossEarnings: basicSalary }, deductions: { advances, advanceTotal, paidEarlyIncentiveTotal, totalDeductions: roundCurrency(advanceTotal + paidEarlyIncentiveTotal) }, incentives, incentiveTotal, netPay });
 }
 
 /** An employee's extra days for one period can never exceed the number of days in that cycle. */

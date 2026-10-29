@@ -24,8 +24,9 @@ export function validateEntry(body: Record<string, unknown>, kind: EntryKind): {
     ? typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= MAX_EXTRA_DAYS
     : isMoneyAmount(value);
   if (!valid) return { error: kind === 'extraDay' ? `Enter a valid number of days (0 to ${MAX_EXTRA_DAYS}).` : 'Enter a valid amount.' } as const;
-  return { value: { type, [kind === 'extraDay' ? 'days' : 'amount']: value } };
+  if (kind === 'incentive' && body.paidEarly !== undefined && typeof body.paidEarly !== 'boolean') return { error: 'Paid early must be true or false.' };
+  return { value: { type, [kind === 'extraDay' ? 'days' : 'amount']: value, ...(kind === 'incentive' && body.paidEarly !== undefined ? { paidEarly: body.paidEarly } : {}) } };
 }
 export function serializeEntry(item: any, kind: EntryKind) {
-  return { id: id(item._id), employeeId: id(item.employee), type: item.type, ...(kind === 'extraDay' ? { days: number(item.days) } : { amount: number(item.amount) }) };
+  return { id: id(item._id), employeeId: id(item.employee), type: item.type, ...(kind === 'extraDay' ? { days: number(item.days) } : { amount: number(item.amount) }), ...(kind === 'incentive' ? { paidEarly: item.paidEarly === true } : {}) };
 }

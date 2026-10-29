@@ -32,7 +32,7 @@ describe('franchise P&L API', () => {
     });
   });
 
-  it('calculates the month with payroll and manual P&L inputs in the Next response shape', async () => {
+  it('includes paid-early incentives in monthly payroll and manual P&L inputs', async () => {
     const today = businessDateValue();
     const period = today.slice(0, 7);
     const daysInCycle = new Date(Number(period.slice(0, 4)), Number(period.slice(5, 7)), 0).getDate();
@@ -53,7 +53,7 @@ describe('franchise P&L API', () => {
       { employee: employeeId, date: today, status: 'Present' },
     ]));
     mock.method(Incentive, 'find', () => queryResult([
-      { employee: employeeId, period, amount: 200 },
+      { employee: employeeId, period, amount: 200, paidEarly: true },
     ]));
     mock.method(ExtraDay, 'find', () => queryResult([
       { employee: employeeId, period, days: 1 },
