@@ -65,6 +65,25 @@ describe('franchise attendance API', () => {
     );
   });
 
+  it('materializes roster leave as Absent rather than Present or Week Off', async () => {
+    const date = businessDateValue();
+    mock.method(Franchise, 'findById', () => queryResult({ _id: storeId, isActive: true }));
+    mock.method(WeeklyRoster, 'find', () => queryResult([{
+      createdBy: new mongoose.Types.ObjectId(),
+      entries: [{ employee: employeeId, days: [{ date, shift: 'leave' }] }],
+    }]));
+    mock.method(User, 'find', () => queryResult([{ _id: employeeId, isActive: true, dateOfJoining: new Date('2025-01-01') }]));
+    mock.method(AttendanceRemoval, 'find', () => queryResult([]));
+    const bulkWrite = mock.method(Attendance, 'bulkWrite', async (operations: Array<{ updateOne: { update: { $setOnInsert: { status: string } } } }>) => {
+      assert.equal(operations.length, 1);
+      assert.equal(operations[0].updateOne.update.$setOnInsert.status, 'Absent');
+    });
+    mock.method(Attendance, 'find', () => queryResult([]));
+    const response = await call('GET', `/attendance?storeId=${storeId}&from=${date}&to=${date}`);
+    assert.equal(response.status, 200);
+    assert.equal(bulkWrite.mock.callCount(), 1);
+  });
+
   it('does not query or write roster defaults for a wholly future range', async () => {
     const tomorrow = addDaysToDateValue(businessDateValue(), 1);
     mock.method(Franchise, 'findById', () => queryResult({ _id: storeId, isActive: true }));
@@ -117,22 +136,30 @@ describe('franchise attendance API', () => {
   });
 
   it('gets weekly roster with configured shifts and validates Monday schedules', async () => {
-    mock.method(WeeklyRoster, 'find', () => queryResult([{ weekStart: '2026-01-05', entries: [{ employee: employeeId, days: [{ date: '2026-01-05', shift: 'day' }] }] }]));
+    mock.method(WeeklyRoster, 'find', () => queryResult([{ weekStart: '2026-01-05', entries: [{ employee: employeeId, days: [{ date: '2026-01-05', shift: 'day' }, { date: '2026-01-06', shift: 'leave' }, { date: '2026-01-07', shift: 'off' }] }] }]));
     mock.method(Franchise, 'findById', () => queryResult({ shifts: [{ id: 'day', name: 'Day', startTime: '09:00', endTime: '18:00' }] }));
     const response = await call('GET', `/attendance/weekly-roster?storeId=${storeId}&weekStart=2026-01-05`);
     assert.equal(response.status, 200);
-    const payload = await response.json() as { roster: { entries: Array<{ days: Array<{ shiftName: string }> }> } };
+    const payload = await response.json() as { roster: { entries: Array<{ days: Array<{ shift: string; shiftName: string }> }> } };
     assert.equal(payload.roster.entries[0].days[0].shiftName, 'Day');
+    assert.equal(payload.roster.entries[0].days[1].shift, 'leave');
+    assert.equal(payload.roster.entries[0].days[1].shiftName, 'Leave');
+    assert.equal(payload.roster.entries[0].days[2].shift, 'off');
     const invalid = await call('PUT', '/attendance/weekly-roster', { storeId: String(storeId), weekStart: '2026-01-06', entries: [] });
     assert.equal(invalid.status, 400);
   });
 
-  it('saves a valid weekly roster', async () => {
+  it('saves a valid weekly roster with shifts, leave, and days off', async () => {
     mock.method(Franchise, 'findById', () => queryResult({ shifts: [{ id: 'day', name: 'Day', startTime: '09:00', endTime: '18:00' }] }));
     mock.method(User, 'find', () => queryResult([{ _id: employeeId, isActive: true, dateOfJoining: new Date('2025-01-01') }]));
-    mock.method(WeeklyRoster, 'findOneAndUpdate', () => queryResult({}));
+    const saveRoster = mock.method(WeeklyRoster, 'findOneAndUpdate', (_filter: unknown, update: { $set: { entries: Array<{ days: Array<{ shift: string }> }> } }) => {
+      assert.equal(update.$set.entries[0].days[0].shift, 'leave');
+      assert.equal(update.$set.entries[0].days[6].shift, 'off');
+      return queryResult({});
+    });
     const dates = Array.from({ length: 7 }, (_, index) => `2026-01-${String(index + 5).padStart(2, '0')}`);
-    const response = await call('PUT', '/attendance/weekly-roster', { storeId: String(storeId), weekStart: '2026-01-05', entries: [{ employeeId: String(employeeId), days: dates.map((date) => ({ date, shift: 'day' })) }] });
+    const response = await call('PUT', '/attendance/weekly-roster', { storeId: String(storeId), weekStart: '2026-01-05', entries: [{ employeeId: String(employeeId), days: dates.map((date, index) => ({ date, shift: index === 0 ? 'leave' : index === 6 ? 'off' : 'day' })) }] });
     assert.equal(response.status, 200);
+    assert.equal(saveRoster.mock.callCount(), 1);
   });
 });

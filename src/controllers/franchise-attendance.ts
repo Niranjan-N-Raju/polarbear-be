@@ -63,7 +63,7 @@ export async function getAttendance(request: Request, response: Response, next: 
                 franchise: storeId,
                 employee,
                 date: day.date,
-                status: (day.shift === 'off' ? 'Week Off' : 'Present') as AttendanceRecord['status'],
+                status: (day.shift === 'leave' ? 'Absent' : day.shift === 'off' ? 'Week Off' : 'Present') as AttendanceRecord['status'],
                 comment: '',
                 createdBy,
               }
@@ -196,14 +196,14 @@ export async function putAttendanceWeeklyRoster(request: Request, response: Resp
     const dayValues = entry.days.map((day) => day && typeof day === 'object' ? day as Record<string, unknown> : {});
     const entryDates = dayValues.map((day) => day.date);
     if (new Set(entryDates).size !== 7 || dates.some((date) => !entryDates.includes(date))) { response.status(400).json({ message: 'Roster dates must match the selected week.' }); return; }
-    if (dayValues.some((day) => typeof day.shift !== 'string' || day.shift.length === 0 || day.shift.length > 80)) { response.status(400).json({ message: 'Choose a configured shift or mark the day off.' }); return; }
+    if (dayValues.some((day) => typeof day.shift !== 'string' || day.shift.length === 0 || day.shift.length > 80)) { response.status(400).json({ message: 'Choose a configured shift, day off, or leave.' }); return; }
   }
 
   const store = await Franchise.findById(storeId).select('shifts').lean();
   if (!store) { response.status(404).json({ message: 'Store not found.' }); return; }
   const shifts = (store.shifts ?? []) as Shift[];
   const validShiftIds = new Set(shifts.map((shift) => shift.id));
-  if (inputEntries.some((entry) => (entry.days as Array<Record<string, unknown>>).some((day) => day.shift !== 'off' && !validShiftIds.has(day.shift as string)))) { response.status(400).json({ message: 'Choose a configured shift or mark the day off.' }); return; }
+  if (inputEntries.some((entry) => (entry.days as Array<Record<string, unknown>>).some((day) => day.shift !== 'off' && day.shift !== 'leave' && !validShiftIds.has(day.shift as string)))) { response.status(400).json({ message: 'Choose a configured shift, day off, or leave.' }); return; }
   const employees = await User.find({ _id: { $in: employeeIds }, role: 'employee', franchises: storeId, isActive: { $ne: false } })
     .select('_id dateOfJoining isActive archivedAt').lean();
   if (employees.length !== employeeIds.length) { response.status(400).json({ message: 'Roster employees must be active employees assigned to this store.' }); return; }

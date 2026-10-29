@@ -18,6 +18,7 @@ export function weekDates(weekStart: string) {
   return datesBetween(weekStart, localDateValue(end));
 }
 export function resolveShift(day: RosterDay, shifts: Shift[]) {
+  if (day.shift === 'leave' || day.status === 'leave') return 'leave';
   if (day.shift === 'off' || day.status === 'off') return 'off';
   const exact = shifts.find((shift) => shift.id === day.shift);
   if (exact) return exact.id;
@@ -39,7 +40,7 @@ export function serializeRoster(roster: { weekStart: string; entries: Array<{ em
         return {
           date: day.date,
           shift,
-          shiftName: shiftConfig?.name ?? (shift === 'off' ? 'Off' : 'Unconfigured shift'),
+          shiftName: shiftConfig?.name ?? (shift === 'leave' ? 'Leave' : shift === 'off' ? 'Off' : 'Unconfigured shift'),
           startTime: shiftConfig?.startTime ?? '',
           endTime: shiftConfig?.endTime ?? '',
         };
