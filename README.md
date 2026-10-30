@@ -123,6 +123,22 @@ The seed requires an existing active admin account and associates the demo recor
 
 ## API
 
+### Employee IDs
+
+Employees receive permanent public IDs such as `EMP0001` from a database-wide
+atomic counter shared by the Express and Next.js applications. Database `_id`
+references are unchanged; archiving, restoring, or transferring an employee does
+not change the public ID. Allocation can leave gaps after failed saves; numbers
+are never reused.
+
+For existing employees, `npm run migrate:employee-ids` previews the migration
+without changing data. Back up the database and pause employee creation in both
+apps before running `npm run migrate:employee-ids -- --apply`. The migration
+includes archived employees, orders missing IDs by `createdAt` (ObjectId insertion
+time as a fallback), preserves existing IDs, advances the shared counter, and
+creates the unique employee-code index. Deploy both apps together and resume
+employee creation after migration. Production index creation is explicit.
+
 `GET /api/greet` is public and returns `200` with
 `{"message":"Hello! Welcome to Vajan PB."}`. No bearer token or login is required.
 It does not query MongoDB, and the existing API rate limit still applies.

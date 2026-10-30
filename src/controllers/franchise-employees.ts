@@ -28,7 +28,7 @@ export async function getUsers(request: Request, response: Response, next: NextF
   if (isSearchTooLong(search)) { response.status(400).json({ message: SEARCH_TOO_LONG_MESSAGE }); return; }
   if (search) {
     const regex = new RegExp(escapeRegex(search), 'i');
-    query.$or = [{ name: regex }, { phone: regex }];
+    query.$or = [{ name: regex }, { phone: regex }, { employeeCode: regex }];
   }
   const page = clampPage(pageValue(request.query.page, 1));
   const limit = Math.min(500, pageValue(request.query.limit, 50));
@@ -40,7 +40,7 @@ export async function getUsers(request: Request, response: Response, next: NextF
   const storeName = stores[0]?.name ?? 'Unknown';
   response.json({
     users: users.map((user) => ({
-      _id: String(user._id), name: user.name, email: user.email, phone: user.phone,
+      _id: String(user._id), name: user.name, employeeCode: user.employeeCode, email: user.email, phone: user.phone,
       position: user.position, employmentType: user.employmentType, salary: user.salary,
       role: user.role, isActive: user.isActive !== false, actualDob: user.actualDob,
       dateOfJoining: user.dateOfJoining, archivedAt: user.archivedAt,
@@ -81,7 +81,7 @@ export async function postUsers(request: Request, response: Response, next: Next
   });
   // Audit field names only; employee PII values are never logged.
   auditMutation(request, 'employee.created', { storeId, targetId: user._id, after: { fields: Object.keys(parsed.value ?? {}) } });
-  response.status(201).json({ message: 'Employee created successfully.', user: { _id: String(user._id) } });
+  response.status(201).json({ message: 'Employee created successfully.', user: { _id: String(user._id), employeeCode: user.employeeCode } });
 }
 
 export async function patchUsersId(request: Request, response: Response, next: NextFunction) {

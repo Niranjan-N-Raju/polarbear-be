@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit",
     "seed:demo": "tsx scripts/seedDemoData.ts",
     "migrate:encrypt-pii": "tsx scripts/encryptLegacyPii.ts",
+    "migrate:employee-ids": "tsx scripts/backfillEmployeeCodes.ts",
     "db:sync-indexes": "tsx scripts/syncIndexes.ts"
   },
   "dependencies": {

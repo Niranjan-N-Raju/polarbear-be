@@ -1,5 +1,6 @@
 import mongoose, { Schema } from 'mongoose';
 import { ENCRYPTED_USER_FIELDS, encryptField } from '../utils/crypto.js';
+import { nextEmployeeCode } from '../utils/employeeCode.js';
 
 export interface UserDocumentFile {
   fileId: mongoose.Types.ObjectId;
@@ -25,6 +26,7 @@ export interface UserRecord {
   email: string;
   password?: string;
   name: string;
+  employeeCode?: string;
   role: UserRole;
   preferredLanguage?: 'en' | 'kn';
   isActive?: boolean;
@@ -59,6 +61,7 @@ const userSchema = new Schema<UserRecord>(
     email: { type: String, required: true, lowercase: true, trim: true },
     password: { type: String, required: true, select: false },
     name: { type: String, required: true, trim: true },
+    employeeCode: { type: String, immutable: true, match: /^EMP\d{4,}$/ },
     preferredLanguage: { type: String, enum: ['en', 'kn'], default: 'en' },
     role: {
       type: String,
@@ -95,10 +98,15 @@ const userSchema = new Schema<UserRecord>(
 
 // Matches the Next.js schema's `unique: true` (index name email_1); created via `npm run db:sync-indexes`.
 userSchema.index({ email: 1 }, { unique: true });
+userSchema.index({ employeeCode: 1 }, { unique: true, partialFilterExpression: { employeeCode: { $type: 'string' } } });
 userSchema.index({ franchises: 1 });
 userSchema.index({ createdBy: 1 });
 userSchema.index({ role: 1 });
 userSchema.index({ createdBy: 1, role: 1 });
+
+userSchema.pre('save', async function assignEmployeeCode() {
+  if (this.isNew && this.role === 'employee' && !this.employeeCode) this.employeeCode = await nextEmployeeCode();
+});
 
 userSchema.pre('save', function encryptSensitiveFields() {
   const doc = this as unknown as Record<string, unknown> & { isModified(path: string): boolean };
