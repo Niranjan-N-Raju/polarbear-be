@@ -8,6 +8,7 @@ import { Franchise } from '../../src/models/Franchise.js';
 import { User } from '../../src/models/User.js';
 import { signSessionToken } from '../../src/utils/token.js';
 import { resetRateLimitsForTests } from '../../src/utils/rateLimit.js';
+import { EmployeeCounter } from '../../src/utils/employeeCode.js';
 
 export const userId = new mongoose.Types.ObjectId();
 export const storeId = new mongoose.Types.ObjectId();
@@ -50,6 +51,8 @@ export function setupFranchiseApi(options: { franchise?: () => Record<string, un
 
   beforeEach(() => {
     resetRateLimitsForTests();
+    let employeeNumber = 0;
+    mock.method(EmployeeCounter, 'findOneAndUpdate', async () => ({ value: ++employeeNumber }));
     mock.method(User, 'findById', () => queryResult({
       _id: userId, name: 'Test', email: 'test@example.test', role: 'franchise_admin',
       sessionVersion: 0, isActive: true, franchises: [storeId],

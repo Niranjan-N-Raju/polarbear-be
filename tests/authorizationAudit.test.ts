@@ -518,6 +518,8 @@ describe('resource-level tenant predicates', () => {
       assert.equal(write.mock.callCount(), 0);
     });
     it('does not create a privileged account through employee body mass assignment', async () => {
+      const { EmployeeCounter } = await import('../src/utils/employeeCode.js');
+      mock.method(EmployeeCounter, 'findOneAndUpdate', async () => ({ value: 1 }));
       let fields: Record<string, unknown> | undefined;
       mock.method(User, 'create', async (input: Record<string, unknown>) => {
         fields = input;

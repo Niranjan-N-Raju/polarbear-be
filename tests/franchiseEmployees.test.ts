@@ -35,13 +35,20 @@ describe('franchise employees API', () => {
     let created: Record<string, unknown> = {};
     mock.method(User, 'create', async (input: Record<string, unknown>) => {
       created = input;
-      return { _id: employeeId };
+      return { _id: employeeId, employeeCode: input.employeeCode };
     });
     const response = await call('POST', '/users', { storeId: String(storeId), franchiseIds: [String(storeId)], name: 'New employee' });
     assert.equal(response.status, 201);
     assert.deepEqual(created.franchises, [storeId]);
     assert.equal(created.role, 'employee');
-    assert.equal((await response.json() as { user: { _id: string } }).user._id, String(employeeId));
+    assert.equal(created.employeeCode, 'EMP0001');
+    const body = await response.json() as { user: { _id: string; employeeCode: string } };
+    assert.equal(body.user._id, String(employeeId));
+    assert.equal(body.user.employeeCode, 'EMP0001');
+    const next = await call('POST', '/users', { storeId: String(storeId), name: 'Another employee', employeeCode: 'EMP9999' });
+    assert.equal(next.status, 201);
+    assert.equal(created.employeeCode, 'EMP0002');
+    assert.equal((await next.json() as { user: { employeeCode: string } }).user.employeeCode, 'EMP0002');
   });
 
   it('validates employee payloads and rejects cross-store assignment', async () => {
