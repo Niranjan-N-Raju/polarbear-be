@@ -14,6 +14,7 @@ import { clampPage, escapeRegex, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from
 import { isDateValue } from '../utils/storeAccess.js';
 import { auditMutation } from '../utils/businessLimits.js';
 import { addDaysToDateValue, businessDateValue, businessDayStart } from '../utils/dateUtils.js';
+import { nextEmployeeCode } from '../utils/employeeCode.js';
 export async function getUsers(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const storeId = await resolveStore(request, response);
@@ -78,6 +79,7 @@ export async function postUsers(request: Request, response: Response, next: Next
   const user = await User.create({
     ...parsed.value, email, password: await bcrypt.hash(randomBytes(32).toString('hex'), 12),
     role: 'employee', isActive: true, createdBy: new mongoose.Types.ObjectId(request.auth!.id), franchises: [storeId],
+    employeeCode: await nextEmployeeCode(),
   });
   // Audit field names only; employee PII values are never logged.
   auditMutation(request, 'employee.created', { storeId, targetId: user._id, after: { fields: Object.keys(parsed.value ?? {}) } });
