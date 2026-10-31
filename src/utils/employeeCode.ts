@@ -5,8 +5,8 @@ const schema = new Schema<{ _id: string; value: number }>(
   { collection: 'employee_counters', versionKey: false },
 );
 
-export const EmployeeCounter = (mongoose.models.EmployeeCounter as mongoose.Model<{ _id: string; value: number }> | undefined)
-  ?? mongoose.model('EmployeeCounter', schema);
+export const EmployeeCounter: mongoose.Model<{ _id: string; value: number }> = (mongoose.models.EmployeeCounter as mongoose.Model<{ _id: string; value: number }> | undefined)
+  ?? mongoose.model<{ _id: string; value: number }>('EmployeeCounter', schema);
 
 export async function nextEmployeeCode(): Promise<string> {
   const counter = await EmployeeCounter.findOneAndUpdate(
