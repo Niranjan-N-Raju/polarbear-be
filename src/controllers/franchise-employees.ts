@@ -12,8 +12,10 @@ import { decodeBase64Upload, detectAllowedUploadType, getBucket } from '../utils
 import { bodyRecord, isFranchiseAdmin, stringQuery } from '../utils/franchiseRoute.js';
 import { clampPage, escapeRegex, isSearchTooLong, SEARCH_TOO_LONG_MESSAGE } from '../utils/listQuery.js';
 import { isDateValue } from '../utils/storeAccess.js';
-import { auditMutation } from '../utils/businessLimits.js';
-import { addDaysToDateValue, businessDateValue, businessDayStart } from '../utils/dateUtils.js';
+import { auditMutation, isMoneyAmount } from '../utils/businessLimits.js';
+import { addDaysToDateValue, businessDateValue, businessDayStart, isValidDate } from '../utils/dateUtils.js';
+import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
+import { positionAtDate, salaryAtDate } from '../utils/salaryHistory.js';
 import { nextEmployeeCode } from '../utils/employeeCode.js';
 export async function getUsers(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
@@ -42,7 +44,8 @@ export async function getUsers(request: Request, response: Response, next: NextF
   response.json({
     users: users.map((user) => ({
       _id: String(user._id), name: user.name, employeeCode: user.employeeCode, email: user.email, phone: user.phone,
-      position: user.position, employmentType: user.employmentType, salary: user.salary,
+          position: positionAtDate(user, businessDateValue()), employmentType: user.employmentType, salary: user.salary == null ? null : salaryAtDate(user, businessDateValue()),
+      latestSalary: user.salary,
       role: user.role, isActive: user.isActive !== false, actualDob: user.actualDob,
       dateOfJoining: user.dateOfJoining, archivedAt: user.archivedAt,
       franchises: [{ _id: String(storeId), name: storeName }], createdAt: user.createdAt,
@@ -58,7 +61,7 @@ export async function getUsersId(request: Request, response: Response, next: Nex
   if (!mongoose.isValidObjectId(String(request.params.id))) { response.status(404).json({ message: 'User not found.' }); return; }
   const user = await User.findOne({ _id: String(request.params.id), role: 'employee', franchises: storeId }).select('-password').lean();
   if (!user) { response.status(404).json({ message: 'User not found.' }); return; }
-  response.json({ user: safeUser({ ...user } as unknown as Record<string, unknown>) });
+  response.json({ user: safeUser({ ...user, position: positionAtDate(user, businessDateValue()) } as unknown as Record<string, unknown>) });
 }
 
 export async function postUsers(request: Request, response: Response, next: NextFunction) {
@@ -99,6 +102,9 @@ export async function patchUsersId(request: Request, response: Response, next: N
   const parsed = parseEmployee(body, false);
   if (parsed.error) { response.status(400).json({ message: parsed.error }); return; }
   const update = { ...parsed.value };
+  if (target.salaryRevisions?.length && update.salary !== undefined && update.salary !== target.salary) {
+    response.status(400).json({ message: 'Use Salary hike to change salary after a hike has been recorded.' }); return;
+  }
   if (body.position !== undefined && typeof body.position === 'string' && body.position && body.position !== target.position) {
     const store = await Franchise.findById(storeId).select('positions').lean();
     if (!(store?.positions ?? DEFAULT_POSITION_OPTIONS).includes(body.position)) { response.status(400).json({ message: 'Select a position configured for this store.' }); return; }
@@ -109,6 +115,38 @@ export async function patchUsersId(request: Request, response: Response, next: N
   auditMutation(request, 'employee.updated', { storeId, targetId: target._id, after: { fields: Object.keys(update) } });
   const result = safeUser(saved.toObject() as unknown as Record<string, unknown>);
   response.json({ message: 'User updated.', user: result });
+}
+
+export async function postSalaryHike(request: Request, response: Response, next: NextFunction) {
+  if (!isFranchiseAdmin(request)) { next(); return; }
+  const storeId = await resolveStore(request, response);
+  if (!storeId) return;
+  const target = await targetForStore(String(request.params.id), storeId);
+  if (!target) { response.status(404).json({ message: 'Employee not found.' }); return; }
+  const { salary, effectiveFrom, position } = bodyRecord(request);
+  if (target.isActive === false) { response.status(400).json({ message: 'Archived employees cannot receive a salary hike.' }); return; }
+  if (!isMoneyAmount(salary, { allowZero: false }) || salary <= (target.salary ?? 0)) {
+    response.status(400).json({ message: 'Enter a monthly salary greater than the latest approved salary, with at most two decimal places.' }); return;
+  }
+  if (typeof effectiveFrom !== 'string' || !isValidDate(effectiveFrom) || !isEmployeeActiveOn(target, effectiveFrom)) {
+    response.status(400).json({ message: 'Choose a valid effective date on or after the joining date.' }); return;
+  }
+  if (position !== undefined) {
+    if (typeof position !== 'string' || !position.trim() || position.length > 100) { response.status(400).json({ message: 'Choose a valid promotion position.' }); return; }
+    const store = await Franchise.findById(storeId).select('positions').lean();
+    if (!(store?.positions ?? DEFAULT_POSITION_OPTIONS).includes(position.trim())) { response.status(400).json({ message: 'Select a position configured for this store.' }); return; }
+  }
+  if (target.salaryRevisions?.some((revision) => revision.effectiveFrom >= effectiveFrom)) {
+    response.status(400).json({ message: 'Choose an effective date after the latest salary hike.' }); return;
+  }
+  const updated = await User.findOneAndUpdate(
+    { _id: target._id, role: 'employee', franchises: storeId, isActive: { $ne: false }, salary: target.salary ?? null, 'salaryRevisions.effectiveFrom': { $ne: effectiveFrom } },
+    { $set: { salary, salaryBaseline: target.salaryBaseline ?? target.salary ?? 0 }, $push: { salaryRevisions: { salary, effectiveFrom, ...(typeof position === 'string' ? { position: position.trim() } : {}), storeId, createdBy: new mongoose.Types.ObjectId(request.auth!.id), createdAt: new Date() } } },
+    { new: true, runValidators: true },
+  );
+  if (!updated) { response.status(409).json({ message: 'Salary changed while you were editing. Reload the employee and try again.' }); return; }
+  auditMutation(request, typeof position === 'string' ? 'employee.promoted' : 'employee.salary.hiked', { storeId, targetId: target._id, before: { salary: target.salary, position: target.position }, after: { salary, ...(typeof position === 'string' ? { position: position.trim() } : {}), effectiveFrom } });
+  response.json({ message: typeof position === 'string' ? 'Employee promotion saved.' : 'Salary hike saved.', salary, ...(typeof position === 'string' ? { position: position.trim() } : {}), effectiveFrom });
 }
 
 export async function putUsersId(request: Request, response: Response, next: NextFunction) {

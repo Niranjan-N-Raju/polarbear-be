@@ -7,6 +7,7 @@ import { ExtraDay } from '../src/models/ExtraDay.js';
 import { Franchise } from '../src/models/Franchise.js';
 import { Incentive } from '../src/models/Incentive.js';
 import { User } from '../src/models/User.js';
+import { salaryAtDate, salaryForDates } from '../src/utils/salaryHistory.js';
 import { otherStoreId, queryResult, setupFranchiseApi, storeId, userId } from './helpers/franchiseApi.js';
 
 const call = setupFranchiseApi({ franchise: () => ({ salaryCycleType: 'calendar_month', salaryCycleStartDay: 1, salaryCycleEndDay: 31 }) });
@@ -14,6 +15,35 @@ const employeeId = new mongoose.Types.ObjectId();
 const advanceId = new mongoose.Types.ObjectId();
 
 describe('franchise salary API', () => {
+  it('prorates a mid-cycle hike without changing earlier dates', () => {
+    const employee = { salary: 6200, salaryBaseline: 3100, salaryRevisions: [{ effectiveFrom: '2026-01-16', salary: 6200 }] };
+    const dates = Array.from({ length: 31 }, (_, index) => `2026-01-${String(index + 1).padStart(2, '0')}`);
+    assert.equal(salaryAtDate(employee, '2026-01-15'), 3100);
+    assert.equal(salaryAtDate(employee, '2026-01-16'), 6200);
+    assert.equal(salaryForDates(employee, dates, 0, 31, '2026-01-31'), 4700);
+    assert.equal(salaryForDates(employee, dates, 2, 31, '2026-01-31'), 5100);
+    assert.equal(salaryForDates(employee, ['2025-12-01'], 0, 31, '2025-12-31'), 100);
+  });
+
+  it('uses the hiked rates in payroll projections and salary slips', async () => {
+    const employee = { _id: employeeId, name: 'Ada', salary: 6200, salaryBaseline: 3100, salaryRevisions: [{ effectiveFrom: '2026-01-16', salary: 6200 }], isActive: true };
+    mock.method(Franchise, 'findById', () => queryResult({ _id: storeId, name: 'North', salaryCycleType: 'calendar_month' }));
+    mock.method(User, 'find', () => queryResult([employee]));
+    mock.method(User, 'findOne', () => queryResult(employee));
+    mock.method(Attendance, 'find', () => queryResult(Array.from({ length: 31 }, (_, index) => ({ employee: employeeId, date: `2026-01-${String(index + 1).padStart(2, '0')}`, status: 'Present' }))));
+    mock.method(Incentive, 'find', () => queryResult([]));
+    mock.method(Advance, 'find', () => queryResult([]));
+    mock.method(ExtraDay, 'find', () => queryResult([]));
+    const result = await call('GET', `/salary?storeId=${storeId}&period=2026-01`);
+    assert.equal(result.status, 200);
+    const body = await result.json() as { projections: Array<{ earnedSalary: number; projectedSalary: number }> };
+    assert.equal(body.projections[0].earnedSalary, 4700);
+    assert.equal(body.projections[0].projectedSalary, 4700);
+    const slip = await call('GET', `/salary/slip?storeId=${storeId}&employeeId=${employeeId}&period=2026-01`);
+    assert.equal(slip.status, 200);
+    assert.equal((await slip.json() as { netPay: number }).netPay, 4700);
+  });
+
   it('rejects stores the franchise admin cannot access and invalid periods', async () => {
     assert.equal((await call('GET', `/salary?storeId=${otherStoreId}&period=2026-01`)).status, 403);
     assert.equal((await call('GET', `/salary?storeId=${storeId}&period=2026-13`)).status, 400);

@@ -13,6 +13,7 @@ import { businessDateValue, businessDayStart, datesBetween } from '../utils/date
 import { isEmployeeActiveOn } from '../utils/employeeStatus.js';
 import { bodyRecord, isFranchiseAdmin, isPeriodValue, requireStore, stringQuery } from '../utils/franchiseRoute.js';
 import { getCycleRange, resolveCycleSettings, roundCurrency } from '../utils/salaryCycle.js';
+import { positionAtDate, salaryAtDate, salaryForDates } from '../utils/salaryHistory.js';
 export async function getSalary(request: Request, response: Response, next: NextFunction) {
   if (!isFranchiseAdmin(request)) { next(); return; }
   const period = stringQuery(request, 'period');
@@ -27,7 +28,7 @@ export async function getSalary(request: Request, response: Response, next: Next
   const today = businessDateValue();
   const [employees, attendance, incentives, extraDays, advances] = await Promise.all([
     // Include employees archived during or after this cycle so their earned pay is still listed.
-    User.find({ role: 'employee', franchises: storeId, $or: [{ isActive: { $ne: false } }, { archivedAt: { $gte: businessDayStart(range.from) } }] }).select('name position employmentType salary dateOfJoining isActive archivedAt').sort({ name: 1 }).lean(),
+    User.find({ role: 'employee', franchises: storeId, $or: [{ isActive: { $ne: false } }, { archivedAt: { $gte: businessDayStart(range.from) } }] }).select('name position employmentType salary salaryBaseline salaryRevisions dateOfJoining isActive archivedAt').sort({ name: 1 }).lean(),
     Attendance.find({ franchise: storeId, date: { $gte: range.from, $lte: range.to } }).lean(),
     Incentive.find({ franchise: storeId, period }).lean(),
     ExtraDay.find({ franchise: storeId, period }).lean(),
@@ -44,7 +45,8 @@ export async function getSalary(request: Request, response: Response, next: Next
     const elapsedDates = eligibleDates.filter((date) => date <= today);
     const futureDays = eligibleDates.filter((date) => date > today).length;
     // Week Off is paid; missing elapsed attendance is tracked separately and is not assumed present.
-    const paidDays = elapsedDates.filter((date) => records.get(date) === 'Present' || records.get(date) === 'Week Off').length;
+    const paidDates = elapsedDates.filter((date) => records.get(date) === 'Present' || records.get(date) === 'Week Off');
+    const paidDays = paidDates.length;
     const absentDays = elapsedDates.filter((date) => records.get(date) === 'Absent').length;
     const weekOffDays = elapsedDates.filter((date) => records.get(date) === 'Week Off').length;
     const missingDays = elapsedDates.filter((date) => !records.has(date)).length;
@@ -55,10 +57,12 @@ export async function getSalary(request: Request, response: Response, next: Next
     const paidEarlyIncentiveTotal = roundCurrency(employeeIncentives.reduce((sum, item) => sum + (item.paidEarly ? item.amount : 0), 0));
     const extraDaysTotal = employeeExtraDays.reduce((sum, item) => sum + item.days, 0);
     const advanceTotal = roundCurrency(employeeAdvances.reduce((sum, item) => sum + item.amount, 0));
-    const salary = number(employee.salary);
+    const salary = salaryAtDate(employee, range.to);
+    const basicSalary = roundCurrency(salaryForDates(employee, paidDates, extraDaysTotal, cycleDates.length, range.to));
+    const projectedBase = salaryForDates(employee, [...paidDates, ...eligibleDates.filter((date) => date > today)], extraDaysTotal, cycleDates.length, range.to);
     // Prorate against the full cycle, not just employment-eligible dates.
     // Projection adds future eligible days; earned pay only includes recorded paid days and adjustments.
-    return { employeeId, name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', salary, paidDays, absentDays, weekOffDays, missingDays, futureDays, eligibleDays: eligibleDates.length, incentives: employeeIncentives, incentiveTotal, paidEarlyIncentiveTotal, extraDays: employeeExtraDays, extraDaysTotal, advances: employeeAdvances, advanceTotal, earnedSalary: roundCurrency((salary * (paidDays + extraDaysTotal)) / cycleDates.length + incentiveTotal - advanceTotal - paidEarlyIncentiveTotal), projectedSalary: roundCurrency((salary * (paidDays + futureDays + extraDaysTotal)) / cycleDates.length + incentiveTotal - advanceTotal - paidEarlyIncentiveTotal) };
+    return { employeeId, name: employee.name, position: positionAtDate(employee, range.to), employmentType: employee.employmentType ?? '', salary, basicSalary, paidDays, absentDays, weekOffDays, missingDays, futureDays, eligibleDays: eligibleDates.length, incentives: employeeIncentives, incentiveTotal, paidEarlyIncentiveTotal, extraDays: employeeExtraDays, extraDaysTotal, advances: employeeAdvances, advanceTotal, earnedSalary: roundCurrency(basicSalary + incentiveTotal - advanceTotal - paidEarlyIncentiveTotal), projectedSalary: roundCurrency(projectedBase + incentiveTotal - advanceTotal - paidEarlyIncentiveTotal) };
   });
   response.json({ store: { id: id(store._id), name: store.name }, cycle: { configured: Boolean(store.salaryCycleConfiguredAt), type: cycleType, startDay, endDay, ...range, totalDays: cycleDates.length }, projections });
 }
@@ -95,7 +99,7 @@ export async function getSalarySlip(request: Request, response: Response, next: 
   if (!storeId) return;
   const store = await Franchise.findById(storeId).select('name address phone logo salaryCycleType salaryCycleStartDay salaryCycleEndDay').lean();
   if (!store) { response.status(404).json({ message: 'Store not found.' }); return; }
-  const employee: any = await User.findOne({ _id: employeeId, role: 'employee', franchises: storeId }).select('name position employmentType salary dateOfJoining isActive archivedAt bankName bankAccountNumber bankIfsc panNumber').lean();
+  const employee: any = await User.findOne({ _id: employeeId, role: 'employee', franchises: storeId }).select('name position employmentType salary salaryBaseline salaryRevisions dateOfJoining isActive archivedAt bankName bankAccountNumber bankIfsc panNumber').lean();
   if (!employee) { response.status(404).json({ message: 'Employee not found.' }); return; }
   decryptUserFields(employee);
   const { cycleType, startDay } = resolveCycleSettings(store);
@@ -115,12 +119,12 @@ export async function getSalarySlip(request: Request, response: Response, next: 
   const presentDays = elapsedDates.filter((date) => attendanceByDate.get(date) === 'Present').length;
   const weekOffDays = elapsedDates.filter((date) => attendanceByDate.get(date) === 'Week Off').length;
   const absentDays = elapsedDates.filter((date) => attendanceByDate.get(date) === 'Absent').length;
-  const paidDays = presentDays + weekOffDays;
   const extraDaysTotal = extraDays.reduce((sum: number, item: any) => sum + number(item.days), 0);
   const incentiveTotal = roundCurrency(incentives.reduce((sum: number, item: any) => sum + number(item.amount), 0));
   const paidEarlyIncentiveTotal = roundCurrency(incentives.reduce((sum: number, item: any) => sum + (item.paidEarly === true ? number(item.amount) : 0), 0));
   const advanceTotal = roundCurrency(advances.reduce((sum: number, item: any) => sum + number(item.amount), 0));
-  const basicSalary = roundCurrency((number(employee.salary) * (paidDays + extraDaysTotal)) / cycleDates.length);
+  const paidDates = elapsedDates.filter((date) => attendanceByDate.get(date) === 'Present' || attendanceByDate.get(date) === 'Week Off');
+  const basicSalary = roundCurrency(salaryForDates(employee, paidDates, extraDaysTotal, cycleDates.length, range.to));
   const netPay = roundCurrency(basicSalary + incentiveTotal - advanceTotal - paidEarlyIncentiveTotal);
   response.json({ store: { name: store.name, address: store.address ?? '', phone: store.phone ?? '', logoUrl: store.logo?.fileId ? `/api/stores/logo?storeId=${id(storeId)}` : '' }, period, periodLabel: new Intl.DateTimeFormat('en-IN', { month: 'long', year: 'numeric' }).format(new Date(`${period}-01T00:00:00`)), employee: { name: employee.name, position: employee.position ?? '', employmentType: employee.employmentType ?? '', bankName: employee.bankName ?? '', bankAccountNumber: employee.bankAccountNumber ?? '', bankIfsc: employee.bankIfsc ?? '', panNumber: employee.panNumber ?? '' }, attendance: { totalWorkingDays: payableDates.length, presentDays, weekOffDays, absentDays, extraDays: extraDays.map((item: any) => ({ type: item.type, days: item.days })), extraDaysTotal }, earnings: { basicSalary, grossEarnings: basicSalary }, deductions: { advances, advanceTotal, paidEarlyIncentiveTotal, totalDeductions: roundCurrency(advanceTotal + paidEarlyIncentiveTotal) }, incentives, incentiveTotal, netPay });
 }

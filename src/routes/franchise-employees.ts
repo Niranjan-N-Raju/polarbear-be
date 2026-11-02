@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { deleteUsersId, deleteUsersIdDocumentsDocumentType, getUsers, getUsersId, getUsersIdDocumentsDocumentType, patchUsersId, postUsers, postUsersIdDocumentsDocumentType, putUsersId } from '../controllers/franchise-employees.js';
 import { requireAuth } from '../middleware/auth.js';
+import { postSalaryHike } from '../controllers/franchise-employees.js';
 import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
 export { contentDisposition, sanitizeFileName } from '../services/franchise-employees.js';
 export const franchiseEmployeesRouter = Router();
@@ -11,6 +12,7 @@ router.get('/users', requireAuth, getUsers);
 router.get('/users/:id', requireAuth, getUsersId);
 router.post('/users', requireAuth, postUsers);
 router.patch('/users/:id', requireAuth, patchUsersId);
+router.post('/users/:id/salary-hikes', requireAuth, postSalaryHike);
 router.put('/users/:id', requireAuth, putUsersId);
 router.delete('/users/:id', requireAuth, deleteUsersId);
 router.post('/users/:id/documents/:documentType', requireAuth, uploadLimiter, postUsersIdDocumentsDocumentType);

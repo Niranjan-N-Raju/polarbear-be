@@ -1,3 +1,4 @@
+import { salaryForDates } from '../utils/salaryHistory.js';
 import type { NextFunction, Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { Attendance } from '../models/Attendance.js';
@@ -48,7 +49,7 @@ export async function getPnl(request: Request, response: Response, next: NextFun
   const overallTo = getCycleRange(periodsToShow[periodsToShow.length - 1], cycleType, startDay).to;
 
   const [employees, sales, attendance, incentives, extraDays, pnlInputs] = await Promise.all([
-    User.find({ role: 'employee', franchises: storeId }).select('name salary dateOfJoining isActive archivedAt').lean(),
+    User.find({ role: 'employee', franchises: storeId }).select('name salary salaryBaseline salaryRevisions dateOfJoining isActive archivedAt').lean(),
     Sale.find({ franchise: storeId, date: { $gte: overallFrom, $lte: overallTo } }).select('date totalSale totalExpenses expenses swiggy zomato').lean(),
     Attendance.find({ franchise: storeId, date: { $gte: overallFrom, $lte: overallTo } }).select('employee date status').lean(),
     Incentive.find({ franchise: storeId, period: { $in: periodsToShow } }).lean(),
@@ -101,12 +102,12 @@ export async function getPnl(request: Request, response: Response, next: NextFun
         const status = records.get(date);
         return status === 'Present' || status === 'Week Off';
       }).length;
-      const salary = employee.salary ?? 0;
+      const paidDates = payableDates.filter((date) => records.get(date) === 'Present' || records.get(date) === 'Week Off');
       const incentiveTotal = incentiveTotals.get(`${employeeId}:${period}`) ?? 0;
       const extraDaysTotal = extraDayTotals.get(`${employeeId}:${period}`) ?? 0;
       if (paidDays === 0 && incentiveTotal === 0 && extraDaysTotal === 0) continue;
       // P&L payroll is the full earned cost; salary advances are cash-flow timing and never reduce it.
-      calculatedPayroll += roundCurrency((salary * (paidDays + extraDaysTotal)) / cycleDates.length + incentiveTotal);
+      calculatedPayroll += roundCurrency(salaryForDates(employee, paidDates, extraDaysTotal, cycleDates.length, range.to) + incentiveTotal);
     }
     calculatedPayroll = roundCurrency(calculatedPayroll);
 
