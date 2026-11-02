@@ -103,12 +103,10 @@ export async function patch(request: Request, response: Response) {
       user.mustChangePassword === true &&
       (await bcrypt.compare(newPassword, user.password!))
     ) {
-      response
-        .status(400)
-        .json({
-          message:
-            "Choose a new password that differs from the one you were given.",
-        });
+      response.status(400).json({
+        message:
+          "Choose a new password that differs from the one you were given.",
+      });
       return;
     }
     user.password = await bcrypt.hash(newPassword, 12);

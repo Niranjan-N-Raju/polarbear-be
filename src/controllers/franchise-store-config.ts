@@ -128,22 +128,18 @@ export async function postStoresLogo(
         ? encoded.replace(/^data:[^;]+;base64,/, "").replace(/\s/g, "")
         : "";
     const tooLarge = raw.length > Math.ceil(MAX_LOGO_SIZE / 3) * 4;
-    response
-      .status(tooLarge ? 413 : 400)
-      .json({
-        message: tooLarge
-          ? "Logo must be 2 MB or smaller."
-          : "Logo request is invalid.",
-      });
+    response.status(tooLarge ? 413 : 400).json({
+      message: tooLarge
+        ? "Logo must be 2 MB or smaller."
+        : "Logo request is invalid.",
+    });
     return;
   }
   const contentType = detectAllowedUploadType(decoded);
   if (!contentType || !ALLOWED_LOGO_TYPES.has(contentType)) {
-    response
-      .status(400)
-      .json({
-        message: "Logo contents must be a valid PNG, JPEG, or WEBP image.",
-      });
+    response.status(400).json({
+      message: "Logo contents must be a valid PNG, JPEG, or WEBP image.",
+    });
     return;
   }
   const target = await Franchise.findById(storeId);
@@ -268,12 +264,9 @@ export async function putStoresCycle(
         Number(startDay) < 2 ||
         Number(startDay) > 28))
   ) {
-    response
-      .status(400)
-      .json({
-        message:
-          "Choose a valid cycle type and a custom start day from 2 to 28.",
-      });
+    response.status(400).json({
+      message: "Choose a valid cycle type and a custom start day from 2 to 28.",
+    });
     return;
   }
   const storeId = await getStoreId(request, response);
@@ -385,12 +378,10 @@ export async function putStoresPositions(
       position: { $in: removed },
     }))
   ) {
-    response
-      .status(409)
-      .json({
-        message:
-          "A position is assigned to an employee. Reassign those employees before removing it.",
-      });
+    response.status(409).json({
+      message:
+        "A position is assigned to an employee. Reassign those employees before removing it.",
+    });
     return;
   }
   const previousPositions = [...(store.positions ?? DEFAULT_POSITION_OPTIONS)];
@@ -505,12 +496,10 @@ export async function putStoresShifts(
       "entries.days.shift": { $in: removed },
     }))
   ) {
-    response
-      .status(409)
-      .json({
-        message:
-          "A shift is used in a saved weekly roster. Change those rosters before removing it.",
-      });
+    response.status(409).json({
+      message:
+        "A shift is used in a saved weekly roster. Change those rosters before removing it.",
+    });
     return;
   }
   const previousShifts = (store.shifts ?? []).map((shift) => ({

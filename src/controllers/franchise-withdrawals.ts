@@ -36,11 +36,9 @@ export async function getWithdrawals(
     return;
   }
   if (hasRange && (from > to || exceedsMaxRange(from, to))) {
-    response
-      .status(400)
-      .json({
-        message: "Date range must be ordered and span at most 366 days.",
-      });
+    response.status(400).json({
+      message: "Date range must be ordered and span at most 366 days.",
+    });
     return;
   }
   const [withdrawals, totals] = await Promise.all([
@@ -97,12 +95,10 @@ export async function postWithdrawals(
     targetId: created._id,
     after: validation.value,
   });
-  response
-    .status(201)
-    .json({
-      message: "Entry added successfully.",
-      withdrawal: serialize(created),
-    });
+  response.status(201).json({
+    message: "Entry added successfully.",
+    withdrawal: serialize(created),
+  });
 }
 
 export async function putWithdrawalsId(

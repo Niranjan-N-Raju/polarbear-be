@@ -386,11 +386,9 @@ export async function getAttendanceWeeklyRoster(
   const to = stringQuery(request, "to") ?? "";
   const hasRange = isDateValue(from) && isDateValue(to) && from <= to;
   if (!validMonday(weekStart) && !hasRange) {
-    response
-      .status(400)
-      .json({
-        message: "A valid store and week start or date range are required.",
-      });
+    response.status(400).json({
+      message: "A valid store and week start or date range are required.",
+    });
     return;
   }
   if (hasRange && exceedsMaxRange(from, to)) {
@@ -443,12 +441,10 @@ export async function putAttendanceWeeklyRoster(
     !Array.isArray(entries) ||
     entries.length > MAX_ENTRIES
   ) {
-    response
-      .status(400)
-      .json({
-        message:
-          "A valid store, Monday week start, and roster entries are required.",
-      });
+    response.status(400).json({
+      message:
+        "A valid store, Monday week start, and roster entries are required.",
+    });
     return;
   }
   const dates = weekDates(weekStart);
@@ -475,11 +471,9 @@ export async function putAttendanceWeeklyRoster(
   }
   for (const entry of inputEntries) {
     if (!Array.isArray(entry.days) || entry.days.length !== 7) {
-      response
-        .status(400)
-        .json({
-          message: "Each employee must have one schedule for every day.",
-        });
+      response.status(400).json({
+        message: "Each employee must have one schedule for every day.",
+      });
       return;
     }
     const dayValues = entry.days.map((day) =>
@@ -541,12 +535,10 @@ export async function putAttendanceWeeklyRoster(
     .select("_id dateOfJoining isActive archivedAt")
     .lean();
   if (employees.length !== employeeIds.length) {
-    response
-      .status(400)
-      .json({
-        message:
-          "Roster employees must be active employees assigned to this store.",
-      });
+    response.status(400).json({
+      message:
+        "Roster employees must be active employees assigned to this store.",
+    });
     return;
   }
   const byId = new Map(
@@ -561,12 +553,10 @@ export async function putAttendanceWeeklyRoster(
           !isEmployeeActiveOn(employee, day.date as string)
       )
     ) {
-      response
-        .status(400)
-        .json({
-          message:
-            "Cannot schedule an employee outside their active employment dates.",
-        });
+      response.status(400).json({
+        message:
+          "Cannot schedule an employee outside their active employment dates.",
+      });
       return;
     }
   }

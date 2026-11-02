@@ -77,31 +77,27 @@ async function main(): Promise<void> {
     let assigned = 0;
     for (const employee of missing) {
       const employeeCode = await nextEmployeeCode();
-      const result = await mongoose.connection
-        .collection("users")
-        .updateOne(
-          {
-            _id: employee._id,
-            role: "employee",
-            $or: [
-              { employeeCode: { $exists: false } },
-              { employeeCode: null },
-              { employeeCode: "" },
-            ],
-          },
-          { $set: { employeeCode } }
-        );
+      const result = await mongoose.connection.collection("users").updateOne(
+        {
+          _id: employee._id,
+          role: "employee",
+          $or: [
+            { employeeCode: { $exists: false } },
+            { employeeCode: null },
+            { employeeCode: "" },
+          ],
+        },
+        { $set: { employeeCode } }
+      );
       assigned += result.modifiedCount;
     }
-    await mongoose.connection
-      .collection("users")
-      .createIndex(
-        { employeeCode: 1 },
-        {
-          unique: true,
-          partialFilterExpression: { employeeCode: { $type: "string" } },
-        }
-      );
+    await mongoose.connection.collection("users").createIndex(
+      { employeeCode: 1 },
+      {
+        unique: true,
+        partialFilterExpression: { employeeCode: { $type: "string" } },
+      }
+    );
     console.log(
       JSON.stringify({
         assigned,

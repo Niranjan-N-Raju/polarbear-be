@@ -56,11 +56,9 @@ export async function postProducts(request: Request, response: Response) {
     return;
   }
   if (names.length > MAX_PRODUCTS_PER_REQUEST) {
-    response
-      .status(400)
-      .json({
-        message: `Add at most ${MAX_PRODUCTS_PER_REQUEST} products at a time.`,
-      });
+    response.status(400).json({
+      message: `Add at most ${MAX_PRODUCTS_PER_REQUEST} products at a time.`,
+    });
     return;
   }
   if (names.some((value) => value.length > 100)) {
@@ -160,12 +158,10 @@ export async function deleteProducts(request: Request, response: Response) {
     DumpedInventory.countDocuments({ productId: objectId }),
   ]);
   if (inventoryReferences || dumpedReferences) {
-    response
-      .status(409)
-      .json({
-        message:
-          "This product has stock or disposal history and cannot be deleted.",
-      });
+    response.status(409).json({
+      message:
+        "This product has stock or disposal history and cannot be deleted.",
+    });
     return;
   }
   await Product.deleteOne({ _id: objectId });
@@ -212,11 +208,9 @@ export async function postInventory(
     !isDateValue(body.expiryDate) ||
     !quantity
   ) {
-    response
-      .status(400)
-      .json({
-        message: "Product, expiry date, and a positive quantity are required.",
-      });
+    response.status(400).json({
+      message: "Product, expiry date, and a positive quantity are required.",
+    });
     return;
   }
   const product = await Product.findById(productId).lean();
@@ -315,11 +309,9 @@ export async function patchInventory(
       .sort({ expiryDate: 1 })
       .lean();
     if (earlier) {
-      response
-        .status(400)
-        .json({
-          message: `Use the earlier expiry ${earlier.expiryDate} first.`,
-        });
+      response.status(400).json({
+        message: `Use the earlier expiry ${earlier.expiryDate} first.`,
+      });
       return;
     }
     // Guard quantity in the write itself; a prior read cannot prevent concurrent over-consumption.
@@ -367,18 +359,14 @@ export async function patchInventory(
           targetId: itemId,
           after: { action: "consume", quantityToRestore: quantity },
         });
-        response
-          .status(500)
-          .json({
-            message: "Stock could not be updated. Please contact support.",
-          });
+        response.status(500).json({
+          message: "Stock could not be updated. Please contact support.",
+        });
         return;
       }
-      response
-        .status(409)
-        .json({
-          message: `Use the earlier expiry ${racedEarlier.expiryDate} first.`,
-        });
+      response.status(409).json({
+        message: `Use the earlier expiry ${racedEarlier.expiryDate} first.`,
+      });
       return;
     }
     auditMutation(request, "inventory.stock.consumed", {
@@ -448,11 +436,9 @@ export async function patchInventory(
           after: { action: "dump", quantityToRestore: before.quantity },
         });
       }
-      response
-        .status(500)
-        .json({
-          message: "Expired stock could not be dumped. Please try again.",
-        });
+      response.status(500).json({
+        message: "Expired stock could not be dumped. Please try again.",
+      });
       return;
     }
     auditMutation(request, "inventory.stock.dumped", {

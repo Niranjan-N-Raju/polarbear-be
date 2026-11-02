@@ -208,12 +208,10 @@ export async function postUsers(
     targetId: user._id,
     after: { fields: Object.keys(parsed.value ?? {}) },
   });
-  response
-    .status(201)
-    .json({
-      message: "Employee created successfully.",
-      user: { _id: String(user._id), employeeCode: user.employeeCode },
-    });
+  response.status(201).json({
+    message: "Employee created successfully.",
+    user: { _id: String(user._id), employeeCode: user.employeeCode },
+  });
 }
 
 export async function patchUsersId(
@@ -255,12 +253,10 @@ export async function patchUsersId(
     update.salary !== undefined &&
     update.salary !== target.salary
   ) {
-    response
-      .status(400)
-      .json({
-        message:
-          "Use Salary hike to change salary after a hike has been recorded.",
-      });
+    response.status(400).json({
+      message:
+        "Use Salary hike to change salary after a hike has been recorded.",
+    });
     return;
   }
   if (
@@ -323,12 +319,10 @@ export async function postSalaryHike(
     !isMoneyAmount(salary, { allowZero: false }) ||
     salary <= (target.salary ?? 0)
   ) {
-    response
-      .status(400)
-      .json({
-        message:
-          "Enter a monthly salary greater than the latest approved salary, with at most two decimal places.",
-      });
+    response.status(400).json({
+      message:
+        "Enter a monthly salary greater than the latest approved salary, with at most two decimal places.",
+    });
     return;
   }
   if (
@@ -336,11 +330,9 @@ export async function postSalaryHike(
     !isValidDate(effectiveFrom) ||
     !isEmployeeActiveOn(target, effectiveFrom)
   ) {
-    response
-      .status(400)
-      .json({
-        message: "Choose a valid effective date on or after the joining date.",
-      });
+    response.status(400).json({
+      message: "Choose a valid effective date on or after the joining date.",
+    });
     return;
   }
   if (position !== undefined) {
@@ -369,11 +361,9 @@ export async function postSalaryHike(
       (revision) => revision.effectiveFrom >= effectiveFrom
     )
   ) {
-    response
-      .status(400)
-      .json({
-        message: "Choose an effective date after the latest salary hike.",
-      });
+    response.status(400).json({
+      message: "Choose an effective date after the latest salary hike.",
+    });
     return;
   }
   const updated = await User.findOneAndUpdate(
@@ -406,12 +396,10 @@ export async function postSalaryHike(
     { new: true, runValidators: true }
   );
   if (!updated) {
-    response
-      .status(409)
-      .json({
-        message:
-          "Salary changed while you were editing. Reload the employee and try again.",
-      });
+    response.status(409).json({
+      message:
+        "Salary changed while you were editing. Reload the employee and try again.",
+    });
     return;
   }
   auditMutation(

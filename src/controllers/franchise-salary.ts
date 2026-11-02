@@ -245,12 +245,9 @@ export async function putSalary(
         Number(body.startDay) < 2 ||
         Number(body.startDay) > 28))
   ) {
-    response
-      .status(400)
-      .json({
-        message:
-          "Choose a valid cycle type and a custom start day from 2 to 28.",
-      });
+    response.status(400).json({
+      message: "Choose a valid cycle type and a custom start day from 2 to 28.",
+    });
     return;
   }
   const storeId = await requireStore(request, response);
@@ -573,12 +570,10 @@ export async function createEntry(
     targetId: entry._id,
     after: { employeeId, period: body.period, ...validated.value },
   });
-  response
-    .status(201)
-    .json({
-      message: `${labels[kind]} added successfully.`,
-      [kind]: serializeEntry(entry, kind),
-    });
+  response.status(201).json({
+    message: `${labels[kind]} added successfully.`,
+    [kind]: serializeEntry(entry, kind),
+  });
 }
 export async function updateEntry(
   kind: EntryKind,
@@ -613,16 +608,14 @@ export async function updateEntry(
     franchise: storeId,
   });
   if (!entry) {
-    response
-      .status(404)
-      .json({
-        message:
-          kind === "extraDay"
-            ? "Extra days entry not found."
-            : kind === "advance"
-            ? "Advance not found."
-            : "Incentive not found.",
-      });
+    response.status(404).json({
+      message:
+        kind === "extraDay"
+          ? "Extra days entry not found."
+          : kind === "advance"
+          ? "Advance not found."
+          : "Incentive not found.",
+    });
     return;
   }
 
@@ -671,13 +664,11 @@ export async function deleteEntry(
   }
   const entryId = String(request.params.id);
   if (!mongoose.isValidObjectId(entryId)) {
-    response
-      .status(400)
-      .json({
-        message: `A valid ${
-          kind === "extraDay" ? "extra day" : kind
-        } id is required.`,
-      });
+    response.status(400).json({
+      message: `A valid ${
+        kind === "extraDay" ? "extra day" : kind
+      } id is required.`,
+    });
     return;
   }
   const storeId = await requireStore(request, response);
