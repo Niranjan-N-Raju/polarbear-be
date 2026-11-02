@@ -9,7 +9,7 @@ import {
 } from "../services/franchise-sales.js";
 import { getStoreSales } from "../services/sales.js";
 import { auditMutation } from "../utils/businessLimits.js";
-import { authorizeStore } from "../utils/storeAccess.js";
+import { requireStore } from "../utils/franchiseRoute.js";
 export async function getSales(
   request: Request,
   response: Response,
@@ -19,11 +19,7 @@ export async function getSales(
     next();
     return;
   }
-  const storeObjectId = await authorizeStore(
-    request.query.storeId,
-    request.auth.id,
-    response
-  );
+  const storeObjectId = await requireStore(request, response);
   if (!storeObjectId) return;
   const range = dateRange(request, response);
   if (!range) return;

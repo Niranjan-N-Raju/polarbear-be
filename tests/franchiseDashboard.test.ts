@@ -179,22 +179,21 @@ describe("franchise dashboard API", () => {
     });
   });
 
-  it("requires an explicit valid selected store, without falling back to all stores", async () => {
-    assert.equal((await request("/dashboard")).status, 400);
-    assert.equal((await request("/dashboard?storeId=invalid")).status, 400);
+  it("ignores client-selected stores and always uses the signed store scope", async () => {
+    assert.equal((await request("/dashboard")).status, 200);
+    assert.equal((await request("/dashboard?storeId=invalid")).status, 200);
     assert.equal(
       (await request(`/dashboard?storeId=${otherStoreId}`)).status,
-      403
+      200
     );
-    assert.equal(
-      (
-        await request(
-          `/sales?storeId=${otherStoreId}&from=2026-10-01&to=2026-10-31`
-        )
-      ).status,
-      403
+    const sales = await request(
+      `/sales?storeId=${otherStoreId}&from=2026-10-01&to=2026-10-31`
     );
-    assert.equal(saleQueries.length, 0);
+    assert.equal(sales.status, 200);
+    assert.deepEqual(saleQueries.at(-1), {
+      franchise: storeId,
+      date: { $gte: "2026-10-01", $lte: "2026-10-31" },
+    });
   });
 
   it("scopes every dashboard database query to the authorized selected store", async () => {
@@ -308,7 +307,7 @@ describe("franchise dashboard API", () => {
     ]);
   });
 
-  it("rejects invalid, future, duplicate and unauthorized sales", async () => {
+  it("rejects invalid sales and ignores a spoofed store ID", async () => {
     const create = mock.method(Sale, "create", async () => ({}));
     mock.method(Sale, "findOne", () => queryResult(null));
     assert.equal(
@@ -342,18 +341,18 @@ describe("franchise dashboard API", () => {
       ).status,
       400
     );
+    const spoofedStore = await send("POST", "/sales", {
+      ...validSale,
+      storeId: String(otherStoreId),
+    });
+    assert.equal(spoofedStore.status, 201);
     assert.equal(
-      (
-        await send("POST", "/sales", {
-          ...validSale,
-          storeId: String(otherStoreId),
-        })
-      ).status,
-      403
+      String(create.mock.calls[0].arguments[0].franchise),
+      String(storeId)
     );
     mock.method(Sale, "findOne", () => queryResult({ _id: "existing" }));
     assert.equal((await send("POST", "/sales", validSale)).status, 409);
-    assert.equal(create.mock.callCount(), 0);
+    assert.equal(create.mock.callCount(), 1);
     mock.method(Sale, "findOne", () => queryResult(null));
     mock.method(Sale, "create", async () => {
       throw Object.assign(new Error("dup"), { code: 11000 });

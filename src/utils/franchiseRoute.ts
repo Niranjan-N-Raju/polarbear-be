@@ -13,12 +13,16 @@ export function bodyRecord(request: Request): Record<string, unknown> {
     : {};
 }
 
-export function storeIdFrom(request: Request) {
-  return request.query.storeId ?? bodyRecord(request).storeId;
-}
-
 export async function requireStore(request: Request, response: Response) {
-  return authorizeStore(storeIdFrom(request), request.auth!.id, response);
+  const storeId = request.auth?.storeId;
+  if (!storeId) {
+    response.status(403).json({
+      message: "Select an authorized store to continue.",
+      code: "STORE_SELECTION_REQUIRED",
+    });
+    return null;
+  }
+  return authorizeStore(storeId, request.auth!.id, response);
 }
 
 export function stringQuery(request: Request, key: string) {

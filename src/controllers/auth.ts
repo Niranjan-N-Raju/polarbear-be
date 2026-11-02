@@ -16,6 +16,8 @@ import {
 } from "../utils/token.js";
 import { auditLog, emailHashPrefix } from "../utils/audit.js";
 import { clearWebSession, saveWebSession } from "../utils/webSession.js";
+import { bodyRecord } from "../utils/franchiseRoute.js";
+import { authorizeStore } from "../utils/storeAccess.js";
 export async function postLogin(request: Request, response: Response) {
   // request.ip honours only the configured TRUST_PROXY hop count (1 by default on Vercel, whose edge
   // overwrites X-Forwarded-For), so clients cannot spoof their address via that header.
@@ -125,6 +127,10 @@ export async function postLogin(request: Request, response: Response) {
       name: user.name,
       email: user.email,
       role: user.role,
+      ...((user.role === "franchise_admin" || user.role === "employee") &&
+      user.franchises?.length === 1
+        ? { storeId: String(user.franchises[0]) }
+        : {}),
       sessionVersion: user.sessionVersion,
     });
     auditLog("auth.login.succeeded", {
@@ -182,6 +188,7 @@ export async function postExtend(request: Request, response: Response) {
     name: String(updated.name ?? user.name ?? ""),
     email: String(updated.email ?? user.email ?? ""),
     role: String(updated.role),
+    ...(user.storeId ? { storeId: user.storeId } : {}),
     sessionVersion: user.sessionVersion,
     sessionStart: user.sessionStart,
   });
@@ -192,6 +199,32 @@ export async function postExtend(request: Request, response: Response) {
   });
   saveWebSession(request, response, token);
   response.json({ message: "Session extended.", token });
+}
+
+export async function postSelectStore(request: Request, response: Response) {
+  const storeId = bodyRecord(request).storeId;
+  const authorizedStore = await authorizeStore(
+    storeId,
+    request.auth!.id,
+    response
+  );
+  if (!authorizedStore) return;
+  const auth = request.auth!;
+  const token = await signSessionToken({
+    id: auth.id,
+    name: auth.name ?? "",
+    email: auth.email ?? "",
+    role: auth.role,
+    storeId: String(authorizedStore),
+    sessionVersion: auth.sessionVersion,
+    sessionStart: auth.sessionStart,
+  });
+  saveWebSession(request, response, token);
+  response.json({
+    message: "Store selected.",
+    token,
+    storeId: String(authorizedStore),
+  });
 }
 
 export async function postSession(request: Request, response: Response) {

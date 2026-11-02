@@ -4,7 +4,7 @@ import {
   getDashboardStores,
   getFranchiseDashboard,
 } from "../services/dashboard.js";
-import { authorizeStore } from "../utils/storeAccess.js";
+import { requireStore } from "../utils/franchiseRoute.js";
 import { byUser, rateLimitMiddleware, rateLimits } from "../utils/rateLimit.js";
 import { franchiseSalesRouter } from "./franchise-sales.js";
 
@@ -41,11 +41,7 @@ franchiseDashboardRouter.get(
   expensiveReadLimiter,
   async (request, response) => {
     const auth = request.auth!;
-    const storeObjectId = await authorizeStore(
-      request.query.storeId,
-      auth.id,
-      response
-    );
+    const storeObjectId = await requireStore(request, response);
     if (!storeObjectId) return;
     response.json(await getFranchiseDashboard(storeObjectId, auth.id));
   }

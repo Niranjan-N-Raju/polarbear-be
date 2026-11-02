@@ -7,8 +7,8 @@ import {
 } from "../models/User.js";
 import { decryptUserFields, ENCRYPTED_USER_FIELDS } from "../utils/crypto.js";
 import { businessDateValue } from "../utils/dateUtils.js";
-import { bodyRecord, stringQuery } from "../utils/franchiseRoute.js";
-import { authorizeStore, isDateValue } from "../utils/storeAccess.js";
+import { requireStore } from "../utils/franchiseRoute.js";
+import { isDateValue } from "../utils/storeAccess.js";
 // Base64 inflates 3 MB to ~4 MB, which with the JSON wrapper stays under Vercel's 4.5 MB request limit.
 export const MAX_FILE_SIZE = 3 * 1024 * 1024;
 export const documentFields = {
@@ -56,24 +56,7 @@ export function safeUser<T extends Record<string, unknown>>(user: T): T {
   return decryptUserFields(user);
 }
 export async function resolveStore(request: Request, response: Response) {
-  const body = bodyRecord(request);
-  const assigned =
-    Array.isArray(body.franchiseIds) && typeof body.franchiseIds[0] === "string"
-      ? body.franchiseIds[0]
-      : undefined;
-  const queryStore =
-    stringQuery(request, "storeId") ?? stringQuery(request, "franchiseId");
-  let id: unknown =
-    queryStore ?? (typeof body.storeId === "string" ? body.storeId : assigned);
-  if (!id) {
-    const authUser = await User.findById(request.auth!.id)
-      .select("franchises")
-      .lean();
-    const ownStore = authUser?.franchises?.[0];
-    if (ownStore) id = String(ownStore);
-  }
-  // Express 5 re-parses req.query on every access, so the id is passed directly rather than written back.
-  return authorizeStore(id, request.auth!.id, response);
+  return requireStore(request, response);
 }
 export async function targetForStore(
   id: string,

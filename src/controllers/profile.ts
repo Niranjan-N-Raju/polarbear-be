@@ -145,6 +145,7 @@ export async function patch(request: Request, response: Response) {
     name: user.name,
     email: user.email,
     role: user.role,
+    ...(auth.storeId ? { storeId: auth.storeId } : {}),
     sessionVersion: user.sessionVersion,
     // A password change starts a new session; other edits keep the original 24h absolute limit.
     ...(newPassword !== undefined ? {} : { sessionStart: auth.sessionStart }),

@@ -6,6 +6,7 @@ import {
   postExtend,
   postLogin,
   postLogout,
+  postSelectStore,
   postSession,
 } from "../controllers/auth.js";
 import { deleteWebSession, restoreWebSession } from "../utils/webSession.js";
@@ -14,6 +15,12 @@ export const authRouter = Router();
 authRouter.post("/login", postLogin);
 authRouter.post("/session", restoreWebSession, postSession);
 authRouter.delete("/session", deleteWebSession);
+authRouter.post(
+  "/select-store",
+  requireAuth,
+  rateLimitMiddleware("store-select", rateLimits.storeSelect, byUser),
+  postSelectStore
+);
 authRouter.post(
   "/extend",
   requireAuth,

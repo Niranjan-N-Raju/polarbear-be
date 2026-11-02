@@ -239,6 +239,7 @@ export const rateLimits = {
     maxAttempts: 10,
     lockoutMs: 5 * 60_000,
   },
+  storeSelect: { windowMs: 60_000, maxAttempts: 30, lockoutMs: 60_000 },
   // Failure counters: lock after N failed logins inside the window.
   // Per (account, IP): tight, so one source cannot brute-force an account...
   loginAccountFailures: {

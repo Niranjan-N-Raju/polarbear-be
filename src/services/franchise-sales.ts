@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { withSaleTotals } from "../utils/saleTotals.js";
-import { authorizeStore, isDateValue } from "../utils/storeAccess.js";
+import { requireStore } from "../utils/franchiseRoute.js";
+import { isDateValue } from "../utils/storeAccess.js";
 import { firstValidationMessage, saleBodySchema } from "../utils/validation.js";
 export function dateRange(request: Request, response: Response) {
   const from = request.query.from;
@@ -62,13 +63,9 @@ export async function parseSaleRequest(request: Request, response: Response) {
       .json({ message: firstValidationMessage(parsed.error) });
     return null;
   }
-  const storeObjectId = await authorizeStore(
-    parsed.data.storeId,
-    request.auth?.id ?? "",
-    response
-  );
+  const storeObjectId = await requireStore(request, response);
   if (!storeObjectId) return null;
-  const { storeId: _storeId, ...sale } = parsed.data;
+  const sale = parsed.data;
   // Derive cash on the server so a client cannot submit a value inconsistent with its payment split.
   const cash = sale.totalSale - sale.swiggy - sale.zomato - sale.upi;
   return { storeObjectId, values: withSaleTotals({ ...sale, cash }) };

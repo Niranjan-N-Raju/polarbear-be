@@ -55,9 +55,16 @@ describe("franchise employees API", () => {
     });
   });
 
-  it("rejects an inaccessible store", async () => {
+  it("ignores a spoofed store filter and uses the signed store scope", async () => {
+    let filter: Record<string, unknown> = {};
+    mock.method(User, "find", (query: Record<string, unknown>) => {
+      filter = query;
+      return queryResult([]);
+    });
+    mock.method(User, "countDocuments", async () => 0);
     const response = await call("GET", `/users?storeId=${otherStoreId}`);
-    assert.equal(response.status, 403);
+    assert.equal(response.status, 200);
+    assert.equal(String(filter.franchises), String(storeId));
   });
 
   it("creates employees assigned only to the current store", async () => {

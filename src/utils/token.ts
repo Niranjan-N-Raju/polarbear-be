@@ -10,6 +10,7 @@ export interface SessionUser {
   name: string;
   email: string;
   role: string;
+  storeId?: string;
   sessionVersion?: number;
   /** Epoch seconds of the original login; preserved across /auth/extend. */
   sessionStart?: number;
@@ -29,6 +30,7 @@ export async function signSessionToken(user: SessionUser): Promise<string> {
     name: user.name,
     email: user.email,
     role: user.role,
+    ...(user.storeId ? { storeId: user.storeId } : {}),
     sessionVersion: user.sessionVersion ?? 0,
     sessionStart,
   })

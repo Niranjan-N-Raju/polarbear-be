@@ -11,6 +11,7 @@ import {
 export interface AuthInfo {
   id: string;
   role: string;
+  storeId?: string;
   name?: string;
   email?: string;
   sessionVersion: number;
@@ -80,6 +81,9 @@ export async function requireAuth(
   if (
     !id ||
     !mongoose.isObjectIdOrHexString(id) ||
+    (payload.storeId !== undefined &&
+      (typeof payload.storeId !== "string" ||
+        !mongoose.isObjectIdOrHexString(payload.storeId))) ||
     !Number.isSafeInteger(payload.sessionVersion) ||
     Number(payload.sessionVersion) < 0 ||
     !Number.isSafeInteger(sessionStart) ||
@@ -95,7 +99,7 @@ export async function requireAuth(
     // Signed claims alone cannot reveal an archive, role change, or logout since token issuance.
     // Re-read the user and compare session versions on every authenticated request.
     const user = await User.findById(id)
-      .select("_id name email role isActive sessionVersion mustChangePassword")
+      .select("_id name email role franchises isActive sessionVersion mustChangePassword")
       .lean();
     const currentVersion =
       typeof user?.sessionVersion === "number" ? user.sessionVersion : 0;
@@ -117,9 +121,21 @@ export async function requireAuth(
       return;
     }
 
+    const assignedStoreIds = (user.franchises ?? []).map(String);
+    const storeId =
+      ["franchise_admin", "employee"].includes(user.role) &&
+      typeof payload.storeId === "string" &&
+      assignedStoreIds.includes(payload.storeId)
+        ? payload.storeId
+        : ["franchise_admin", "employee"].includes(user.role) &&
+            payload.storeId === undefined &&
+            assignedStoreIds.length === 1
+          ? assignedStoreIds[0]
+          : undefined;
     request.auth = {
       id: String(user._id),
       role: user.role,
+      ...(storeId ? { storeId } : {}),
       name: user.name,
       email: user.email,
       sessionVersion: currentVersion,

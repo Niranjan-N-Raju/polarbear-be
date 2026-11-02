@@ -411,7 +411,7 @@ export async function getSalarySlip(
       address: store.address ?? "",
       phone: store.phone ?? "",
       logoUrl: store.logo?.fileId
-        ? `/api/stores/logo?storeId=${id(storeId)}`
+        ? "/api/stores/logo"
         : "",
     },
     period,

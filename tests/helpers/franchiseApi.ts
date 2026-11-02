@@ -42,20 +42,36 @@ export function queryResult(value: unknown) {
 }
 
 export function setupFranchiseApi(
-  options: { franchise?: () => Record<string, unknown> } = {}
+  options: {
+    franchise?: () => Record<string, unknown>;
+    storeIds?: mongoose.Types.ObjectId[];
+    initialStoreId?: string | null;
+  } = {}
 ) {
   const state = { url: "", token: "" };
+  const assignedStoreIds = options.storeIds ?? [storeId];
+  const configuredStoreIds = [...assignedStoreIds];
+  let initialToken = "";
+  const initialStoreId =
+    options.initialStoreId === null
+      ? undefined
+      : options.initialStoreId ??
+        (assignedStoreIds.length === 1
+          ? String(assignedStoreIds[0])
+          : undefined);
   let server: Server;
   const previousSecret = process.env.JWT_SECRET;
 
   before(async () => {
     process.env.JWT_SECRET = "unit-test-only-not-a-production-secret";
-    state.token = await signSessionToken({
+    initialToken = await signSessionToken({
       id: String(userId),
       name: "Test",
       email: "test@example.test",
       role: "franchise_admin",
+      ...(initialStoreId ? { storeId: initialStoreId } : {}),
     });
+    state.token = initialToken;
     server = app.listen(0, "127.0.0.1");
     await once(server, "listening");
     const address = server.address();
@@ -72,6 +88,8 @@ export function setupFranchiseApi(
   });
 
   beforeEach(() => {
+    assignedStoreIds.splice(0, assignedStoreIds.length, ...configuredStoreIds);
+    state.token = initialToken;
     resetRateLimitsForTests();
     let employeeNumber = 0;
     mock.method(EmployeeCounter, "findOneAndUpdate", async () => ({
@@ -85,17 +103,22 @@ export function setupFranchiseApi(
         role: "franchise_admin",
         sessionVersion: 0,
         isActive: true,
-        franchises: [storeId],
+        franchises: assignedStoreIds,
       })
     );
     mock.method(Franchise, "find", () =>
-      queryResult([{ _id: storeId, ...(options.franchise?.() ?? {}) }])
+      queryResult(
+        assignedStoreIds.map((id) => ({
+          _id: id,
+          ...(options.franchise?.() ?? {}),
+        }))
+      )
     );
   });
   afterEach(() => mock.restoreAll());
 
   return async function call(method: string, path: string, body?: unknown) {
-    return fetch(`${state.url}${path}`, {
+    const response = await fetch(`${state.url}${path}`, {
       method,
       headers: {
         Authorization: "Bearer " + state.token,
@@ -103,5 +126,10 @@ export function setupFranchiseApi(
       },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
+    if (method === "POST" && path === "/auth/select-store" && response.ok) {
+      const result = (await response.clone().json()) as { token?: string };
+      if (result.token) state.token = result.token;
+    }
+    return response;
   };
 }

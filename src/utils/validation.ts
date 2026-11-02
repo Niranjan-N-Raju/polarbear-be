@@ -116,7 +116,6 @@ const saleAmount = (field: string) =>
 
 export const saleBodySchema = z
   .object({
-    storeId: z.string().max(50),
     date: z
       .string()
       .refine((value) => {
