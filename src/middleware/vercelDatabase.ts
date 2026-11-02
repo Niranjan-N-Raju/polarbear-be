@@ -1,8 +1,15 @@
 import type { RequestHandler } from "express";
-import { connectToDatabase, DatabaseCooldownError } from "../config/database.js";
+import {
+  connectToDatabase,
+  DatabaseCooldownError,
+} from "../config/database.js";
 import { ConfigurationError, loadConfig } from "../config/env.js";
 
-export const vercelDatabase: RequestHandler = async (request, response, next) => {
+export const vercelDatabase: RequestHandler = async (
+  request,
+  response,
+  next
+) => {
   if (process.env.VERCEL !== "1") {
     next();
     return;
@@ -19,12 +26,18 @@ export const vercelDatabase: RequestHandler = async (request, response, next) =>
     } else if (error instanceof ConfigurationError) {
       console.error("[database] Configuration invalid:", error.message);
     } else {
-      console.error(`[database] ${stage} failed.`,
-        error instanceof Error ? error.name : "UnknownError");
+      console.error(
+        `[database] ${stage} failed.`,
+        error instanceof Error ? error.name : "UnknownError"
+      );
     }
-    response.status(503).json(request.path === "/health"
-      ? { status: "unavailable", database: "disconnected" }
-      : { message: "Database unavailable. Please try again later." });
+    response
+      .status(503)
+      .json(
+        request.path === "/health"
+          ? { status: "unavailable", database: "disconnected" }
+          : { message: "Database unavailable. Please try again later." }
+      );
     return;
   }
   next();

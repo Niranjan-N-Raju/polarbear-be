@@ -1,4 +1,4 @@
-import { ENCRYPTED_USER_FIELDS, encrypt, isEncrypted } from './crypto.js';
+import { ENCRYPTED_USER_FIELDS, encrypt, isEncrypted } from "./crypto.js";
 
 type EncryptedField = (typeof ENCRYPTED_USER_FIELDS)[number];
 
@@ -18,18 +18,23 @@ export interface LegacyPiiStats {
 }
 
 export function requireFieldEncryptionKey(): void {
-  if (!/^[0-9a-fA-F]{64}$/.test(process.env.FIELD_ENCRYPTION_KEY ?? '')) {
-    throw new Error('FIELD_ENCRYPTION_KEY (64 hex characters) is required to run the PII migration.');
+  if (!/^[0-9a-fA-F]{64}$/.test(process.env.FIELD_ENCRYPTION_KEY ?? "")) {
+    throw new Error(
+      "FIELD_ENCRYPTION_KEY (64 hex characters) is required to run the PII migration."
+    );
   }
 }
 
 /** Returns the update needed for one user document, or null if nothing is plaintext. Idempotent. */
-export function planLegacyPiiEncryption(doc: Record<string, unknown>): LegacyPiiPlan | null {
-  const set: LegacyPiiPlan['set'] = {};
-  const guard: LegacyPiiPlan['guard'] = {};
+export function planLegacyPiiEncryption(
+  doc: Record<string, unknown>
+): LegacyPiiPlan | null {
+  const set: LegacyPiiPlan["set"] = {};
+  const guard: LegacyPiiPlan["guard"] = {};
   for (const field of ENCRYPTED_USER_FIELDS) {
     const value = doc[field];
-    if (typeof value !== 'string' || value === '' || isEncrypted(value)) continue;
+    if (typeof value !== "string" || value === "" || isEncrypted(value))
+      continue;
     set[field] = encrypt(value);
     guard[field] = value;
   }
@@ -39,11 +44,11 @@ export function planLegacyPiiEncryption(doc: Record<string, unknown>): LegacyPii
 export interface UsersCollectionLike {
   find(
     filter: Record<string, unknown>,
-    options: { projection: Record<string, 1> },
+    options: { projection: Record<string, 1> }
   ): AsyncIterable<Record<string, unknown>>;
   updateOne(
     filter: Record<string, unknown>,
-    update: { $set: Record<string, string> },
+    update: { $set: Record<string, string> }
   ): Promise<{ modifiedCount: number }>;
 }
 
@@ -53,13 +58,12 @@ export interface UsersCollectionLike {
  */
 export async function migrateLegacyPii(
   users: UsersCollectionLike,
-  options: { dryRun: boolean },
+  options: { dryRun: boolean }
 ): Promise<LegacyPiiStats> {
   requireFieldEncryptionKey();
-  const fieldsEncrypted = Object.fromEntries(ENCRYPTED_USER_FIELDS.map((f) => [f, 0])) as Record<
-    EncryptedField,
-    number
-  >;
+  const fieldsEncrypted = Object.fromEntries(
+    ENCRYPTED_USER_FIELDS.map((f) => [f, 0])
+  ) as Record<EncryptedField, number>;
   const stats: LegacyPiiStats = {
     scanned: 0,
     documentsNeedingUpdate: 0,
@@ -67,9 +71,13 @@ export async function migrateLegacyPii(
     documentsSkippedConcurrent: 0,
     fieldsEncrypted,
   };
-  const projection = Object.fromEntries(ENCRYPTED_USER_FIELDS.map((f) => [f, 1 as const]));
+  const projection = Object.fromEntries(
+    ENCRYPTED_USER_FIELDS.map((f) => [f, 1 as const])
+  );
   const filter = {
-    $or: ENCRYPTED_USER_FIELDS.map((f) => ({ [f]: { $type: 'string', $nin: [''], $not: /^enc:/ } })),
+    $or: ENCRYPTED_USER_FIELDS.map((f) => ({
+      [f]: { $type: "string", $nin: [""], $not: /^enc:/ },
+    })),
   };
 
   for await (const doc of users.find(filter, { projection })) {
@@ -78,13 +86,18 @@ export async function migrateLegacyPii(
     if (!plan) continue;
     stats.documentsNeedingUpdate += 1;
     if (options.dryRun) {
-      for (const field of Object.keys(plan.set) as EncryptedField[]) stats.fieldsEncrypted[field] += 1;
+      for (const field of Object.keys(plan.set) as EncryptedField[])
+        stats.fieldsEncrypted[field] += 1;
       continue;
     }
-    const result = await users.updateOne({ _id: doc._id, ...plan.guard }, { $set: plan.set });
+    const result = await users.updateOne(
+      { _id: doc._id, ...plan.guard },
+      { $set: plan.set }
+    );
     if (result.modifiedCount === 1) {
       stats.documentsUpdated += 1;
-      for (const field of Object.keys(plan.set) as EncryptedField[]) stats.fieldsEncrypted[field] += 1;
+      for (const field of Object.keys(plan.set) as EncryptedField[])
+        stats.fieldsEncrypted[field] += 1;
     } else {
       stats.documentsSkippedConcurrent += 1;
     }

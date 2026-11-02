@@ -8,7 +8,9 @@ interface SaleTotalsInput {
 
 export function withSaleTotals<T extends SaleTotalsInput>(sale: T) {
   // Fill missing legacy fields only: zero and negative stored totals are meaningful, not defaults.
-  const totalExpenses = sale.totalExpenses ?? (sale.expenses ?? []).reduce((sum, expense) => sum + expense.amount, 0);
+  const totalExpenses =
+    sale.totalExpenses ??
+    (sale.expenses ?? []).reduce((sum, expense) => sum + expense.amount, 0);
   return {
     ...sale,
     upiCharge: sale.upiCharge ?? 0,

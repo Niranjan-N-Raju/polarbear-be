@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema } from "mongoose";
 
 export interface PnlInputRecord {
   _id: mongoose.Types.ObjectId;
@@ -12,15 +12,20 @@ export interface PnlInputRecord {
 
 const schema = new Schema<PnlInputRecord>(
   {
-    franchise: { type: Schema.Types.ObjectId, ref: 'Franchise', required: true },
+    franchise: {
+      type: Schema.Types.ObjectId,
+      ref: "Franchise",
+      required: true,
+    },
     period: { type: String, required: true, match: /^\d{4}-\d{2}$/ },
     values: { type: Map, of: Number, default: {} },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 schema.index({ franchise: 1, period: 1 }, { unique: true });
 
-export const PnlInput = (mongoose.models.PnlInput as mongoose.Model<PnlInputRecord> | undefined)
-  ?? mongoose.model<PnlInputRecord>('PnlInput', schema);
+export const PnlInput =
+  (mongoose.models.PnlInput as mongoose.Model<PnlInputRecord> | undefined) ??
+  mongoose.model<PnlInputRecord>("PnlInput", schema);

@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema } from "mongoose";
 
 // These collections are shared with the Next.js app, so names and field shapes must stay compatible.
 
@@ -36,7 +36,7 @@ const productSchema = new Schema<ProductRecord>(
     normalizedName: { type: String, required: true },
     createdAt: { type: Date, default: () => new Date() },
   },
-  { collection: 'products', versionKey: false, autoIndex: false },
+  { collection: "products", versionKey: false, autoIndex: false }
 );
 productSchema.index({ normalizedName: 1 }, { unique: true });
 
@@ -49,9 +49,12 @@ const inventoryItemSchema = new Schema<InventoryItemRecord>(
     expiryDate: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
     createdAt: { type: Date, default: () => new Date() },
   },
-  { collection: 'inventory_items', versionKey: false, autoIndex: false },
+  { collection: "inventory_items", versionKey: false, autoIndex: false }
 );
-inventoryItemSchema.index({ storeId: 1, productId: 1, expiryDate: 1 }, { unique: true });
+inventoryItemSchema.index(
+  { storeId: 1, productId: 1, expiryDate: 1 },
+  { unique: true }
+);
 inventoryItemSchema.index({ storeId: 1, expiryDate: 1 });
 
 const dumpedInventorySchema = new Schema<DumpedInventoryRecord>(
@@ -64,13 +67,23 @@ const dumpedInventorySchema = new Schema<DumpedInventoryRecord>(
     quantity: { type: Number, required: true },
     dumpedAt: { type: Date, default: () => new Date() },
   },
-  { collection: 'dumped_inventory', versionKey: false, autoIndex: false },
+  { collection: "dumped_inventory", versionKey: false, autoIndex: false }
 );
 dumpedInventorySchema.index({ storeId: 1, dumpedAt: -1 });
 
-export const Product = (mongoose.models.Product as mongoose.Model<ProductRecord> | undefined)
-  ?? mongoose.model<ProductRecord>('Product', productSchema);
-export const InventoryItem = (mongoose.models.InventoryItem as mongoose.Model<InventoryItemRecord> | undefined)
-  ?? mongoose.model<InventoryItemRecord>('InventoryItem', inventoryItemSchema);
-export const DumpedInventory = (mongoose.models.DumpedInventory as mongoose.Model<DumpedInventoryRecord> | undefined)
-  ?? mongoose.model<DumpedInventoryRecord>('DumpedInventory', dumpedInventorySchema);
+export const Product =
+  (mongoose.models.Product as mongoose.Model<ProductRecord> | undefined) ??
+  mongoose.model<ProductRecord>("Product", productSchema);
+export const InventoryItem =
+  (mongoose.models.InventoryItem as
+    | mongoose.Model<InventoryItemRecord>
+    | undefined) ??
+  mongoose.model<InventoryItemRecord>("InventoryItem", inventoryItemSchema);
+export const DumpedInventory =
+  (mongoose.models.DumpedInventory as
+    | mongoose.Model<DumpedInventoryRecord>
+    | undefined) ??
+  mongoose.model<DumpedInventoryRecord>(
+    "DumpedInventory",
+    dumpedInventorySchema
+  );

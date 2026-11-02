@@ -23,13 +23,13 @@ function getKey(): Buffer {
   const hex = process.env.FIELD_ENCRYPTION_KEY;
   if (!hex) {
     throw new Error(
-      "FIELD_ENCRYPTION_KEY is not set. Add a 64-character hex string to .env.local",
+      "FIELD_ENCRYPTION_KEY is not set. Add a 64-character hex string to .env.local"
     );
   }
   const key = Buffer.from(hex, "hex");
   if (key.length !== 32) {
     throw new Error(
-      "FIELD_ENCRYPTION_KEY must be a 64-character hex string (32 bytes).",
+      "FIELD_ENCRYPTION_KEY must be a 64-character hex string (32 bytes)."
     );
   }
   return key;
@@ -53,7 +53,9 @@ export function encrypt(plaintext: string): string {
   const tag = cipher.getAuthTag();
   return (
     ENCRYPTED_PREFIX +
-    `${iv.toString("base64url")}.${tag.toString("base64url")}.${ciphertext.toString("base64url")}`
+    `${iv.toString("base64url")}.${tag.toString(
+      "base64url"
+    )}.${ciphertext.toString("base64url")}`
   );
 }
 
@@ -69,8 +71,11 @@ export function decrypt(stored: string): string {
   const tag = Buffer.from(tagB64, "base64url");
   const ciphertext = Buffer.from(ctB64, "base64url");
   // Pin the GCM tag length; otherwise Node accepts truncated (4-15 byte) tags and weakens integrity.
-  if (iv.length !== 12 || tag.length !== AUTH_TAG_BYTES) throw new Error("Invalid encrypted field format.");
-  const decipher = createDecipheriv(ALGORITHM, key, iv, { authTagLength: AUTH_TAG_BYTES });
+  if (iv.length !== 12 || tag.length !== AUTH_TAG_BYTES)
+    throw new Error("Invalid encrypted field format.");
+  const decipher = createDecipheriv(ALGORITHM, key, iv, {
+    authTagLength: AUTH_TAG_BYTES,
+  });
   decipher.setAuthTag(tag);
   return decipher.update(ciphertext).toString("utf8") + decipher.final("utf8");
 }
@@ -89,7 +94,9 @@ export function decryptBuffer(stored: Buffer): Buffer {
   const iv = stored.subarray(0, 12);
   const tag = stored.subarray(12, 28);
   const ciphertext = stored.subarray(28);
-  const decipher = createDecipheriv(ALGORITHM, getKey(), iv, { authTagLength: AUTH_TAG_BYTES });
+  const decipher = createDecipheriv(ALGORITHM, getKey(), iv, {
+    authTagLength: AUTH_TAG_BYTES,
+  });
   decipher.setAuthTag(tag);
   return Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 }
@@ -105,7 +112,9 @@ export const ENCRYPTED_USER_FIELDS = [
 ] as const;
 
 /** Decrypts any ENCRYPTED_USER_FIELDS present on a plain user object (e.g. from .lean()). */
-export function decryptUserFields<T extends Record<string, unknown>>(user: T): T {
+export function decryptUserFields<T extends Record<string, unknown>>(
+  user: T
+): T {
   for (const field of ENCRYPTED_USER_FIELDS) {
     const value = user[field];
     if (typeof value !== "string") continue;
@@ -113,13 +122,14 @@ export function decryptUserFields<T extends Record<string, unknown>>(user: T): T
       (user as Record<string, unknown>)[field] = decrypt(value);
     } catch {
       // One corrupt or undecryptable field must not fail the whole response; never log the value.
-      console.warn(`[crypto] Could not decrypt user field "${field}"; returning an empty value.`);
+      console.warn(
+        `[crypto] Could not decrypt user field "${field}"; returning an empty value.`
+      );
       (user as Record<string, unknown>)[field] = "";
     }
   }
   return user;
 }
-
 
 /**
  * Encrypt a field value if FIELD_ENCRYPTION_KEY is configured.
@@ -130,7 +140,9 @@ export function encryptField(value: string | undefined): string | undefined {
   if (!value) return value;
   if (isEncrypted(value)) return value;
   if (!process.env.FIELD_ENCRYPTION_KEY) {
-    throw new Error("FIELD_ENCRYPTION_KEY is required to encrypt sensitive fields.");
+    throw new Error(
+      "FIELD_ENCRYPTION_KEY is required to encrypt sensitive fields."
+    );
   }
   return encrypt(value);
 }

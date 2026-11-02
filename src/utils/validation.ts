@@ -1,37 +1,71 @@
-import { z } from 'zod';
-import { hasCurrencyPrecision, isBusinessYear, localToday, MAX_MONEY_AMOUNT } from './businessLimits.js';
+import { z } from "zod";
+import {
+  hasCurrencyPrecision,
+  isBusinessYear,
+  localToday,
+  MAX_MONEY_AMOUNT,
+} from "./businessLimits.js";
 
 const optionalText = (maxLength: number) =>
-  z.string().max(maxLength, `Must be ${maxLength} characters or fewer.`).optional().transform((value) => value?.trim());
+  z
+    .string()
+    .max(maxLength, `Must be ${maxLength} characters or fewer.`)
+    .optional()
+    .transform((value) => value?.trim());
 
 const optionalPhone = z
   .string()
   .optional()
   .transform((value) => value?.trim())
-  .refine((value) => !value || /^\d{10}$/.test(value), 'Phone number must be exactly 10 digits.');
+  .refine(
+    (value) => !value || /^\d{10}$/.test(value),
+    "Phone number must be exactly 10 digits."
+  );
 
 const passwordSchema = z
   .string()
-  .min(12, 'Password must be at least 12 characters.')
+  .min(12, "Password must be at least 12 characters.")
   .max(200)
-  .regex(/[A-Z]/, 'Password must contain at least one uppercase letter.')
-  .regex(/[a-z]/, 'Password must contain at least one lowercase letter.')
-  .regex(/[0-9]/, 'Password must contain at least one digit.')
-  .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character.');
+  .regex(/[A-Z]/, "Password must contain at least one uppercase letter.")
+  .regex(/[a-z]/, "Password must contain at least one lowercase letter.")
+  .regex(/[0-9]/, "Password must contain at least one digit.")
+  .regex(
+    /[^A-Za-z0-9]/,
+    "Password must contain at least one special character."
+  );
 
-const nameSchema = z.string().trim().min(1, 'Name is required.').max(100, 'Name must be 100 characters or fewer.');
-const emailSchema = z.string().trim().min(1, 'Email is required.').max(254, 'Email is too long.').email('Invalid email format.').transform((value) => value.toLowerCase());
+const nameSchema = z
+  .string()
+  .trim()
+  .min(1, "Name is required.")
+  .max(100, "Name must be 100 characters or fewer.");
+const emailSchema = z
+  .string()
+  .trim()
+  .min(1, "Email is required.")
+  .max(254, "Email is too long.")
+  .email("Invalid email format.")
+  .transform((value) => value.toLowerCase());
 
 export const storeBodySchema = z.object({
-  name: nameSchema.pipe(z.string().max(100, 'Store name must be 100 characters or fewer.')),
-  storeCode: z.string().min(1, 'Store code is required.').max(20, 'Store code must be 20 characters or fewer.').transform((value) => value.trim().toUpperCase()),
+  name: nameSchema.pipe(
+    z.string().max(100, "Store name must be 100 characters or fewer.")
+  ),
+  storeCode: z
+    .string()
+    .min(1, "Store code is required.")
+    .max(20, "Store code must be 20 characters or fewer.")
+    .transform((value) => value.trim().toUpperCase()),
   address: optionalText(300),
   phone: optionalPhone,
   description: optionalText(500),
-  storeType: z.enum(['company', 'franchise']).optional(),
+  storeType: z.enum(["company", "franchise"]).optional(),
   ownerName: optionalText(100),
   ownerPhone: optionalPhone,
-  ownerEmail: z.preprocess((value) => value === '' ? undefined : value, emailSchema.optional()),
+  ownerEmail: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    emailSchema.optional()
+  ),
 });
 
 export const storeArchiveSchema = z.object({
@@ -42,21 +76,25 @@ export const createUserSchema = z.object({
   name: nameSchema,
   email: emailSchema.optional(),
   password: z.string().max(200).optional(),
-  role: z.enum(['admin', 'sub_admin', 'franchise_admin', 'employee']).optional(),
+  role: z
+    .enum(["admin", "sub_admin", "franchise_admin", "employee"])
+    .optional(),
   franchiseIds: z.array(z.string().max(50)).max(50).optional(),
   phone: optionalPhone,
 });
 
 export const patchUserSchema = z.object({
   name: nameSchema.optional(),
-  role: z.enum(['admin', 'sub_admin', 'franchise_admin', 'employee']).optional(),
+  role: z
+    .enum(["admin", "sub_admin", "franchise_admin", "employee"])
+    .optional(),
   franchiseIds: z.array(z.string().max(50)).max(50).optional(),
   phone: optionalPhone,
 });
 
 export const profileSchema = z.object({
   name: nameSchema.optional(),
-  preferredLanguage: z.enum(['en', 'kn']).optional(),
+  preferredLanguage: z.enum(["en", "kn"]).optional(),
   currentPassword: z.string().max(200).optional(),
   newPassword: passwordSchema.optional(),
 });
@@ -64,37 +102,62 @@ export const profileSchema = z.object({
 export { emailSchema, passwordSchema };
 
 export function firstValidationMessage(error: z.ZodError): string {
-  return error.issues[0]?.message ?? 'Invalid input.';
+  return error.issues[0]?.message ?? "Invalid input.";
 }
 const saleAmount = (field: string) =>
-  z.number({ error: `A valid ${field} is required.` })
+  z
+    .number({ error: `A valid ${field} is required.` })
     .min(0, `A valid ${field} is required.`)
     .max(MAX_MONEY_AMOUNT, `The ${field} is too large.`)
-    .refine(hasCurrencyPrecision, `The ${field} can have at most 2 decimal places.`);
+    .refine(
+      hasCurrencyPrecision,
+      `The ${field} can have at most 2 decimal places.`
+    );
 
-export const saleBodySchema = z.object({
-  storeId: z.string().max(50),
-  date: z.string()
-    .refine((value) => {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-      const date = new Date(`${value}T00:00:00Z`);
-      return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
-    }, 'A valid date is required.')
-    .refine(isBusinessYear, 'A valid date is required.')
-    .refine((value) => value <= localToday(), 'Date cannot be in the future.'),
-  totalSale: saleAmount('total sale'),
-  swiggy: saleAmount('swiggy'),
-  zomato: saleAmount('zomato'),
-  upi: saleAmount('upi'),
-  upiCharge: saleAmount('upi charge'),
-  expenses: z.array(z.object({
-    name: z.string().trim().min(1, 'Expense name is required.').max(100, 'Expense name must be 100 characters or fewer.'),
-    amount: saleAmount('expense amount'),
-  })).max(100, 'A sale can have at most 100 expenses.').default([]),
-}).refine(
-  (sale) => sale.swiggy + sale.zomato + sale.upi <= sale.totalSale,
-  { message: 'Swiggy, Zomato and UPI cannot exceed the total sale.', path: ['totalSale'] },
-).refine(
-  (sale) => sale.expenses.reduce((sum, expense) => sum + expense.amount, 0) <= MAX_MONEY_AMOUNT,
-  { message: 'Total expenses are too large.', path: ['expenses'] },
-);
+export const saleBodySchema = z
+  .object({
+    storeId: z.string().max(50),
+    date: z
+      .string()
+      .refine((value) => {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+        const date = new Date(`${value}T00:00:00Z`);
+        return (
+          !Number.isNaN(date.getTime()) &&
+          date.toISOString().slice(0, 10) === value
+        );
+      }, "A valid date is required.")
+      .refine(isBusinessYear, "A valid date is required.")
+      .refine(
+        (value) => value <= localToday(),
+        "Date cannot be in the future."
+      ),
+    totalSale: saleAmount("total sale"),
+    swiggy: saleAmount("swiggy"),
+    zomato: saleAmount("zomato"),
+    upi: saleAmount("upi"),
+    upiCharge: saleAmount("upi charge"),
+    expenses: z
+      .array(
+        z.object({
+          name: z
+            .string()
+            .trim()
+            .min(1, "Expense name is required.")
+            .max(100, "Expense name must be 100 characters or fewer."),
+          amount: saleAmount("expense amount"),
+        })
+      )
+      .max(100, "A sale can have at most 100 expenses.")
+      .default([]),
+  })
+  .refine((sale) => sale.swiggy + sale.zomato + sale.upi <= sale.totalSale, {
+    message: "Swiggy, Zomato and UPI cannot exceed the total sale.",
+    path: ["totalSale"],
+  })
+  .refine(
+    (sale) =>
+      sale.expenses.reduce((sum, expense) => sum + expense.amount, 0) <=
+      MAX_MONEY_AMOUNT,
+    { message: "Total expenses are too large.", path: ["expenses"] }
+  );

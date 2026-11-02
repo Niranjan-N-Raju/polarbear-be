@@ -1,21 +1,21 @@
-import type { Express, RequestHandler } from 'express';
+import type { Express, RequestHandler } from "express";
 
-const DEV_ORIGINS = [3000, 3001, 3002, 3003, 3004, 3005, 5173].flatMap((port) => [
-  `http://localhost:${port}`,
-  `http://127.0.0.1:${port}`,
-]);
+const DEV_ORIGINS = [3000, 3001, 3002, 3003, 3004, 3005, 5173].flatMap(
+  (port) => [`http://localhost:${port}`, `http://127.0.0.1:${port}`]
+);
 
 /** Every Vercel environment (production and preview) is internet-facing, so treat it as production. */
-export const isProduction = (): boolean => process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+export const isProduction = (): boolean =>
+  process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
 
 /** Production requires an explicit WEB_ORIGINS allowlist; localhost defaults apply only outside production. */
 export function allowedOrigins(): string[] {
   const configured = process.env.WEB_ORIGINS;
   if (configured === undefined) return isProduction() ? [] : DEV_ORIGINS;
   return configured
-    .split(',')
+    .split(",")
     .map((value) => value.trim())
-    .filter((value) => value.length > 0 && value !== '*');
+    .filter((value) => value.length > 0 && value !== "*");
 }
 
 /**
@@ -26,44 +26,61 @@ export function allowedOrigins(): string[] {
  */
 export function configureTrustProxy(app: Express): void {
   const configured = process.env.TRUST_PROXY?.trim();
-  const raw = configured || (process.env.VERCEL === '1' ? '1' : '');
-  if (!raw || raw === '0' || raw === 'false') {
-    app.set('trust proxy', false);
+  const raw = configured || (process.env.VERCEL === "1" ? "1" : "");
+  if (!raw || raw === "0" || raw === "false") {
+    app.set("trust proxy", false);
     return;
   }
   const hops = Number(raw);
   if (!Number.isInteger(hops) || hops < 1 || hops > 10) {
-    throw new Error('TRUST_PROXY must be an integer hop count between 1 and 10.');
+    throw new Error(
+      "TRUST_PROXY must be an integer hop count between 1 and 10."
+    );
   }
-  app.set('trust proxy', hops);
+  app.set("trust proxy", hops);
 }
 
 export const securityHeaders: RequestHandler = (_request, response, next) => {
-  response.setHeader('X-Content-Type-Options', 'nosniff');
-  response.setHeader('X-Frame-Options', 'DENY');
-  response.setHeader('Referrer-Policy', 'no-referrer');
-  response.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
-  response.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  response.setHeader('Cache-Control', 'no-store');
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("X-Frame-Options", "DENY");
+  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader(
+    "Content-Security-Policy",
+    "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+  );
+  response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  response.setHeader(
+    "Permissions-Policy",
+    "camera=(), microphone=(), geolocation=()"
+  );
+  response.setHeader("Cache-Control", "no-store");
   if (isProduction()) {
-    response.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    response.setHeader(
+      "Strict-Transport-Security",
+      "max-age=31536000; includeSubDomains"
+    );
   }
   next();
 };
 
 export const cors: RequestHandler = (request, response, next) => {
-  const origin = request.header('origin');
+  const origin = request.header("origin");
   if (origin && allowedOrigins().includes(origin)) {
-    response.setHeader('Access-Control-Allow-Origin', origin);
-    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Web-Session');
-    response.setHeader('Access-Control-Allow-Credentials', 'true');
-    response.setHeader('Access-Control-Max-Age', '600');
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    response.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+    );
+    response.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type, Authorization, X-Web-Session"
+    );
+    response.setHeader("Access-Control-Allow-Credentials", "true");
+    response.setHeader("Access-Control-Max-Age", "600");
   }
-  response.append('Vary', 'Origin');
+  response.append("Vary", "Origin");
 
-  if (request.method === 'OPTIONS') {
+  if (request.method === "OPTIONS") {
     response.sendStatus(204);
     return;
   }

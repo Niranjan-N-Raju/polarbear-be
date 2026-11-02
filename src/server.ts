@@ -1,6 +1,9 @@
 import { app } from "./app.js";
 import { loadConfig } from "./config/env.js";
-import { connectToDatabase, disconnectFromDatabase } from "./config/database.js";
+import {
+  connectToDatabase,
+  disconnectFromDatabase,
+} from "./config/database.js";
 import { configureTrustProxy } from "./middleware/securityHeaders.js";
 import { configureServerTimeouts } from "./config/httpServer.js";
 
@@ -16,7 +19,9 @@ async function main(): Promise<void> {
   configureServerTimeouts(server);
 
   server.on("error", () => {
-    console.error("API failed to listen. Check whether PORT is already in use.");
+    console.error(
+      "API failed to listen. Check whether PORT is already in use."
+    );
     void disconnectFromDatabase().finally(() => {
       process.exitCode = 1;
     });
@@ -44,7 +49,9 @@ async function main(): Promise<void> {
 }
 
 void main().catch(async () => {
-  console.error("Startup failed. Check MONGODB_URI, MONGODB_DB, JWT_SECRET, PORT, and MongoDB connectivity.");
+  console.error(
+    "Startup failed. Check MONGODB_URI, MONGODB_DB, JWT_SECRET, PORT, and MongoDB connectivity."
+  );
   await disconnectFromDatabase();
   process.exitCode = 1;
 });

@@ -15,11 +15,18 @@ import { franchiseSalaryRouter } from "./routes/franchise-salary.js";
 import { healthRouter } from "./routes/health.js";
 import { profileRouter } from "./routes/profile.js";
 import { rejectDangerousKeys } from "./middleware/rejectDangerousKeys.js";
-import { configureTrustProxy, cors, securityHeaders } from "./middleware/securityHeaders.js";
+import {
+  configureTrustProxy,
+  cors,
+  securityHeaders,
+} from "./middleware/securityHeaders.js";
 import { byIp, rateLimitMiddleware, rateLimits } from "./utils/rateLimit.js";
 import { vercelDatabase } from "./middleware/vercelDatabase.js";
 
-const UPLOAD_PATHS = ["/api/users/:id/documents/:documentType", "/api/stores/logo"];
+const UPLOAD_PATHS = [
+  "/api/users/:id/documents/:documentType",
+  "/api/stores/logo",
+];
 
 export const app = express();
 
@@ -74,12 +81,19 @@ const handleError: ErrorRequestHandler = (error, _request, response, _next) => {
     response.status(413).json({ message: "Request body is too large." });
     return;
   }
-  if (parserError.type === "entity.parse.failed" || parserError.type === "encoding.unsupported" || parserError.type === "charset.unsupported") {
+  if (
+    parserError.type === "entity.parse.failed" ||
+    parserError.type === "encoding.unsupported" ||
+    parserError.type === "charset.unsupported"
+  ) {
     response.status(400).json({ message: "Invalid request body." });
     return;
   }
   if (process.env.NODE_ENV !== "test") {
-    console.error("Unhandled request error:", error instanceof Error ? error.name : "unknown");
+    console.error(
+      "Unhandled request error:",
+      error instanceof Error ? error.name : "unknown"
+    );
   }
   response.status(500).json({ message: "Internal server error." });
 };

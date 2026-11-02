@@ -21,7 +21,7 @@ export function dateValue(year: number, monthIndex: number, day: number) {
 export function getCycleRange(
   period: string,
   cycleType: "calendar_month" | "custom",
-  startDay: number,
+  startDay: number
 ) {
   const [year, month] = period.split("-").map(Number);
   const endMonthIndex = month - 1;
@@ -48,7 +48,8 @@ export function resolveCycleSettings(store: {
     (store.salaryCycleStartDay === 1 && store.salaryCycleEndDay === 31
       ? "calendar_month"
       : "custom");
-  const startDay = cycleType === "calendar_month" ? 1 : (store.salaryCycleStartDay ?? 2);
+  const startDay =
+    cycleType === "calendar_month" ? 1 : store.salaryCycleStartDay ?? 2;
   const endDay = cycleType === "calendar_month" ? 31 : startDay - 1;
   return { cycleType, startDay, endDay };
 }

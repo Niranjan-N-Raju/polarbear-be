@@ -5,7 +5,7 @@ export const MAX_PAGE = 10_000;
 export const SEARCH_TOO_LONG_MESSAGE = `Search must be ${MAX_SEARCH_LENGTH} characters or fewer.`;
 
 export function isSearchTooLong(value: unknown): boolean {
-  return typeof value === 'string' && value.trim().length > MAX_SEARCH_LENGTH;
+  return typeof value === "string" && value.trim().length > MAX_SEARCH_LENGTH;
 }
 
 export function clampPage(page: number): number {
@@ -13,5 +13,5 @@ export function clampPage(page: number): number {
 }
 
 export function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

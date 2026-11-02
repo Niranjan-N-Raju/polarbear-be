@@ -29,12 +29,16 @@ export function loadConfig(): AppConfig {
     throw new ConfigurationError("JWT_SECRET must be at least 32 characters.");
   }
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new ConfigurationError("PORT must be an integer between 1 and 65535.");
+    throw new ConfigurationError(
+      "PORT must be an integer between 1 and 65535."
+    );
   }
   // Any Vercel environment (including previews) holds real data, so it must meet production rules.
   if (process.env.NODE_ENV === "production" || process.env.VERCEL === "1") {
     if (!/^[0-9a-fA-F]{64}$/.test(process.env.FIELD_ENCRYPTION_KEY ?? "")) {
-      throw new ConfigurationError("FIELD_ENCRYPTION_KEY (64 hex characters) is required in production.");
+      throw new ConfigurationError(
+        "FIELD_ENCRYPTION_KEY (64 hex characters) is required in production."
+      );
     }
   }
 

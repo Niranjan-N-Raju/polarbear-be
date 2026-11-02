@@ -4,14 +4,30 @@ import type { Server } from "node:http";
 import { after, afterEach, before, beforeEach, it, mock } from "node:test";
 import mongoose from "mongoose";
 import { app } from "../src/app.js";
-import { CONNECTION_FAILURE_COOLDOWN_MS, connectToDatabase, resetDatabaseCooldownForTests } from "../src/config/database.js";
+import {
+  CONNECTION_FAILURE_COOLDOWN_MS,
+  connectToDatabase,
+  resetDatabaseCooldownForTests,
+} from "../src/config/database.js";
 import { loadConfig } from "../src/config/env.js";
 import type { AppConfig } from "../src/config/env.js";
 import { decrypt, encryptField, isEncrypted } from "../src/utils/crypto.js";
 
-const keys = ["VERCEL", "NODE_ENV", "MONGODB_URI", "MONGODB_DB", "JWT_SECRET", "WEB_ORIGINS", "FIELD_ENCRYPTION_KEY", "PORT"] as const;
-const savedEnv = Object.fromEntries(keys.map(key => [key, process.env[key]]));
-const readyStateDescriptor = Object.getOwnPropertyDescriptor(mongoose.connection, "readyState");
+const keys = [
+  "VERCEL",
+  "NODE_ENV",
+  "MONGODB_URI",
+  "MONGODB_DB",
+  "JWT_SECRET",
+  "WEB_ORIGINS",
+  "FIELD_ENCRYPTION_KEY",
+  "PORT",
+] as const;
+const savedEnv = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+const readyStateDescriptor = Object.getOwnPropertyDescriptor(
+  mongoose.connection,
+  "readyState"
+);
 const config: AppConfig = {
   port: 4000,
   mongoUri: "mongodb://127.0.0.1:27017",
@@ -23,7 +39,10 @@ let server: Server;
 let baseUrl: string;
 
 before(async () => {
-  Object.defineProperty(mongoose.connection, "readyState", { configurable: true, get: () => state });
+  Object.defineProperty(mongoose.connection, "readyState", {
+    configurable: true,
+    get: () => state,
+  });
   server = app.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
@@ -46,8 +65,15 @@ beforeEach(() => {
 
 afterEach(() => mock.restoreAll());
 after(async () => {
-  await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-  if (readyStateDescriptor) Object.defineProperty(mongoose.connection, "readyState", readyStateDescriptor);
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve()))
+  );
+  if (readyStateDescriptor)
+    Object.defineProperty(
+      mongoose.connection,
+      "readyState",
+      readyStateDescriptor
+    );
   else Reflect.deleteProperty(mongoose.connection, "readyState");
   for (const key of keys) {
     if (savedEnv[key] === undefined) delete process.env[key];
@@ -57,7 +83,14 @@ after(async () => {
 
 it("shares concurrent connection attempts and reuses an established connection", async () => {
   let finish!: (value: typeof mongoose) => void;
-  const connect = mock.method(mongoose, "connect", () => new Promise<typeof mongoose>(resolve => { finish = resolve; }));
+  const connect = mock.method(
+    mongoose,
+    "connect",
+    () =>
+      new Promise<typeof mongoose>((resolve) => {
+        finish = resolve;
+      })
+  );
   const first = connectToDatabase(config);
   const second = connectToDatabase(config);
   assert.equal(connect.mock.callCount(), 1);
@@ -69,12 +102,20 @@ it("shares concurrent connection attempts and reuses an established connection",
 });
 
 it("connects before health checks and authentication routing on Vercel", async () => {
-  const connect = mock.method(mongoose, "connect", async () => { state = 1; return mongoose; });
+  const connect = mock.method(mongoose, "connect", async () => {
+    state = 1;
+    return mongoose;
+  });
   const health = await fetch(`${baseUrl}/health`);
   assert.equal(health.status, 200);
-  assert.deepEqual(await health.json(), { status: "ok", database: "connected" });
+  assert.deepEqual(await health.json(), {
+    status: "ok",
+    database: "connected",
+  });
   const login = await fetch(`${baseUrl}/auth/login`, {
-    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: "{}",
   });
   assert.equal(login.status, 400);
   assert.equal(connect.mock.callCount(), 1);
@@ -82,19 +123,31 @@ it("connects before health checks and authentication routing on Vercel", async (
 
 it("reports failures without leaking details, fails fast during the cooldown, then retries", async () => {
   const log = mock.method(console, "error", () => {});
-  const connect = mock.method(mongoose, "connect", async () => { throw new Error("private connection details"); });
+  const connect = mock.method(mongoose, "connect", async () => {
+    throw new Error("private connection details");
+  });
   const health = await fetch(`${baseUrl}/health`);
   assert.equal(health.status, 503);
-  assert.deepEqual(await health.json(), { status: "unavailable", database: "disconnected" });
+  assert.deepEqual(await health.json(), {
+    status: "unavailable",
+    database: "disconnected",
+  });
   // Within the cooldown the next request fails immediately without another connection attempt.
   const login = await fetch(`${baseUrl}/auth/login`, { method: "POST" });
   assert.equal(login.status, 503);
-  assert.deepEqual(await login.json(), { message: "Database unavailable. Please try again later." });
+  assert.deepEqual(await login.json(), {
+    message: "Database unavailable. Please try again later.",
+  });
   assert.equal(connect.mock.callCount(), 1);
-  assert.ok(!JSON.stringify(log.mock.calls).includes("private connection details"));
+  assert.ok(
+    !JSON.stringify(log.mock.calls).includes("private connection details")
+  );
   const realNow = Date.now();
   mock.method(Date, "now", () => realNow + CONNECTION_FAILURE_COOLDOWN_MS + 1);
-  connect.mock.mockImplementation(async () => { state = 1; return mongoose; });
+  connect.mock.mockImplementation(async () => {
+    state = 1;
+    return mongoose;
+  });
   assert.equal((await fetch(`${baseUrl}/health`)).status, 200);
   assert.equal(connect.mock.callCount(), 2);
 });
@@ -108,7 +161,9 @@ it("requires FIELD_ENCRYPTION_KEY on any Vercel environment, not only NODE_ENV=p
 });
 
 it("keeps the public greeting independent of MongoDB", async () => {
-  const connect = mock.method(mongoose, "connect", async () => { throw new Error("must not connect"); });
+  const connect = mock.method(mongoose, "connect", async () => {
+    throw new Error("must not connect");
+  });
   assert.equal((await fetch(`${baseUrl}/greet`)).status, 200);
   assert.equal(connect.mock.callCount(), 0);
 });
@@ -117,12 +172,17 @@ it("initializes production API requests with encryption and without a browser al
   process.env.NODE_ENV = "production";
   process.env.WEB_ORIGINS = "";
   process.env.FIELD_ENCRYPTION_KEY = "a".repeat(64);
-  const connect = mock.method(mongoose, "connect", async () => { state = 1; return mongoose; });
+  const connect = mock.method(mongoose, "connect", async () => {
+    state = 1;
+    return mongoose;
+  });
   const response = await fetch(`${baseUrl}/health`);
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), null);
   assert.equal(connect.mock.callCount(), 1);
-  const browser = await fetch(`${baseUrl}/health`, { headers: { Origin: "https://unlisted.example.test" } });
+  const browser = await fetch(`${baseUrl}/health`, {
+    headers: { Origin: "https://unlisted.example.test" },
+  });
   assert.equal(browser.headers.get("access-control-allow-origin"), null);
 });
 
@@ -130,7 +190,10 @@ it("rejects unencrypted sensitive writes without a key in local and production e
   process.env.FIELD_ENCRYPTION_KEY = "";
   for (const environment of ["development", "production"]) {
     process.env.NODE_ENV = environment;
-    assert.throws(() => encryptField("sensitive-test-value"), /FIELD_ENCRYPTION_KEY/);
+    assert.throws(
+      () => encryptField("sensitive-test-value"),
+      /FIELD_ENCRYPTION_KEY/
+    );
   }
 });
 
@@ -155,7 +218,10 @@ it("logs the exact configuration requirement without exposing values to clients 
   const connect = mock.method(mongoose, "connect", async () => mongoose);
   const response = await fetch(`${baseUrl}/health`);
   assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), { status: "unavailable", database: "disconnected" });
+  assert.deepEqual(await response.json(), {
+    status: "unavailable",
+    database: "disconnected",
+  });
   assert.deepEqual(log.mock.calls[0].arguments, [
     "[database] Configuration invalid:",
     "FIELD_ENCRYPTION_KEY (64 hex characters) is required in production.",
@@ -166,7 +232,9 @@ it("logs the exact configuration requirement without exposing values to clients 
 
 it("preserves local server initialization outside Vercel", async () => {
   delete process.env.VERCEL;
-  const connect = mock.method(mongoose, "connect", async () => { throw new Error("must not connect"); });
+  const connect = mock.method(mongoose, "connect", async () => {
+    throw new Error("must not connect");
+  });
   assert.equal((await fetch(`${baseUrl}/health`)).status, 503);
   assert.equal(connect.mock.callCount(), 0);
 });

@@ -18,17 +18,24 @@ export function resetDatabaseCooldownForTests(): void {
 export async function connectToDatabase(config: AppConfig): Promise<void> {
   if (isDatabaseConnected()) return;
   if (connectionPromise) return connectionPromise;
-  if (lastFailureAt !== undefined && Date.now() - lastFailureAt < CONNECTION_FAILURE_COOLDOWN_MS) {
-    throw new DatabaseCooldownError("Database connection is cooling down after a failure.");
+  if (
+    lastFailureAt !== undefined &&
+    Date.now() - lastFailureAt < CONNECTION_FAILURE_COOLDOWN_MS
+  ) {
+    throw new DatabaseCooldownError(
+      "Database connection is cooling down after a failure."
+    );
   }
-  connectionPromise = mongoose.connect(config.mongoUri, {
-    dbName: config.mongoDatabase,
-    maxPoolSize: 10,
-    serverSelectionTimeoutMS: 10_000,
-    connectTimeoutMS: 10_000,
-    socketTimeoutMS: 45_000,
-    autoIndex: false,
-  }).then(() => undefined);
+  connectionPromise = mongoose
+    .connect(config.mongoUri, {
+      dbName: config.mongoDatabase,
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10_000,
+      connectTimeoutMS: 10_000,
+      socketTimeoutMS: 45_000,
+      autoIndex: false,
+    })
+    .then(() => undefined);
   try {
     await connectionPromise;
     lastFailureAt = undefined;

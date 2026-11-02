@@ -1,4 +1,4 @@
-import mongoose, { Schema } from 'mongoose';
+import mongoose, { Schema } from "mongoose";
 
 /**
  * Records an explicitly deleted attendance mark so the weekly-roster default is not re-created
@@ -16,15 +16,22 @@ export interface AttendanceRemovalRecord {
 
 const schema = new Schema<AttendanceRemovalRecord>(
   {
-    franchise: { type: Schema.Types.ObjectId, ref: 'Franchise', required: true },
-    employee: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    franchise: {
+      type: Schema.Types.ObjectId,
+      ref: "Franchise",
+      required: true,
+    },
+    employee: { type: Schema.Types.ObjectId, ref: "User", required: true },
     date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    createdBy: { type: Schema.Types.ObjectId, ref: "User" },
   },
-  { collection: 'attendance_removals', timestamps: true, autoIndex: false },
+  { collection: "attendance_removals", timestamps: true, autoIndex: false }
 );
 
 schema.index({ franchise: 1, employee: 1, date: 1 }, { unique: true });
 
-export const AttendanceRemoval = (mongoose.models.AttendanceRemoval as mongoose.Model<AttendanceRemovalRecord> | undefined)
-  ?? mongoose.model<AttendanceRemovalRecord>('AttendanceRemoval', schema);
+export const AttendanceRemoval =
+  (mongoose.models.AttendanceRemoval as
+    | mongoose.Model<AttendanceRemovalRecord>
+    | undefined) ??
+  mongoose.model<AttendanceRemovalRecord>("AttendanceRemoval", schema);

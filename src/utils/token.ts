@@ -1,7 +1,7 @@
-import { SignJWT } from 'jose';
+import { SignJWT } from "jose";
 
-export const SESSION_ISSUER = 'polar-bear-backend';
-export const SESSION_AUDIENCE = 'polar-bear-api';
+export const SESSION_ISSUER = "polar-bear-backend";
+export const SESSION_AUDIENCE = "polar-bear-api";
 export const SESSION_TOKEN_TTL_SECONDS = 8 * 60 * 60;
 export const SESSION_ABSOLUTE_MAX_SECONDS = 24 * 60 * 60;
 
@@ -17,8 +17,9 @@ export interface SessionUser {
 
 export async function signSessionToken(user: SessionUser): Promise<string> {
   const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error('JWT_SECRET is required.');
-  if (secret.length < 32) throw new Error('JWT_SECRET must be at least 32 characters.');
+  if (!secret) throw new Error("JWT_SECRET is required.");
+  if (secret.length < 32)
+    throw new Error("JWT_SECRET must be at least 32 characters.");
   const now = Math.floor(Date.now() / 1000);
   const sessionStart = user.sessionStart ?? now;
   // Extending an eight-hour token must not move the original login's absolute lifetime.
@@ -31,10 +32,12 @@ export async function signSessionToken(user: SessionUser): Promise<string> {
     sessionVersion: user.sessionVersion ?? 0,
     sessionStart,
   })
-    .setProtectedHeader({ alg: 'HS256' })
+    .setProtectedHeader({ alg: "HS256" })
     .setIssuer(SESSION_ISSUER)
     .setAudience(SESSION_AUDIENCE)
     .setIssuedAt()
-    .setExpirationTime(Math.min(now + SESSION_TOKEN_TTL_SECONDS, absoluteExpiry))
+    .setExpirationTime(
+      Math.min(now + SESSION_TOKEN_TTL_SECONDS, absoluteExpiry)
+    )
     .sign(new TextEncoder().encode(secret));
 }

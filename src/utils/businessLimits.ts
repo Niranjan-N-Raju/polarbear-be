@@ -1,6 +1,6 @@
-import type { Request } from 'express';
-import { auditLog } from './audit.js';
-import { businessDateValue } from './dateUtils.js';
+import type { Request } from "express";
+import { auditLog } from "./audit.js";
+import { businessDateValue } from "./dateUtils.js";
 
 // Upper bounds keep a single tampered request from corrupting store totals and reports.
 export const MAX_MONEY_AMOUNT = 100_000_000;
@@ -16,12 +16,17 @@ export function hasCurrencyPrecision(value: number): boolean {
   return Math.abs(cents - Math.round(cents)) < 1e-6;
 }
 
-export function isMoneyAmount(value: unknown, { allowZero = true } = {}): value is number {
-  return typeof value === 'number'
-    && Number.isFinite(value)
-    && (allowZero ? value >= 0 : value > 0)
-    && value <= MAX_MONEY_AMOUNT
-    && hasCurrencyPrecision(value);
+export function isMoneyAmount(
+  value: unknown,
+  { allowZero = true } = {}
+): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value) &&
+    (allowZero ? value >= 0 : value > 0) &&
+    value <= MAX_MONEY_AMOUNT &&
+    hasCurrencyPrecision(value)
+  );
 }
 
 /** Valid calendar date within the supported business range (year >= MIN_BUSINESS_YEAR). */
@@ -37,7 +42,12 @@ export function localToday(): string {
 export function auditMutation(
   request: Request,
   action: string,
-  details: { storeId?: unknown; targetId?: unknown; before?: unknown; after?: unknown },
+  details: {
+    storeId?: unknown;
+    targetId?: unknown;
+    before?: unknown;
+    after?: unknown;
+  }
 ): void {
   auditLog(action, {
     actorId: request.auth?.id,

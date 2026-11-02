@@ -12,18 +12,25 @@ const businessDateFormatter = new Intl.DateTimeFormat("en-CA", {
 /** Calendar date (YYYY-MM-DD) of an instant in the business timezone (India), independent of server TZ. */
 export function businessDateValue(date: Date = new Date()): string {
   const parts = businessDateFormatter.formatToParts(date);
-  const part = (type: string) => parts.find((item) => item.type === type)?.value ?? "";
+  const part = (type: string) =>
+    parts.find((item) => item.type === type)?.value ?? "";
   return `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}`;
 }
 
 /** First and last date of the current business-timezone month. */
-export function businessMonthRange(date: Date = new Date()): { from: string; to: string } {
+export function businessMonthRange(date: Date = new Date()): {
+  from: string;
+  to: string;
+} {
   const today = businessDateValue(date);
   const year = Number(today.slice(0, 4));
   const month = Number(today.slice(5, 7));
   const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
   const prefix = today.slice(0, 7);
-  return { from: `${prefix}-01`, to: `${prefix}-${String(lastDay).padStart(2, "0")}` };
+  return {
+    from: `${prefix}-01`,
+    to: `${prefix}-${String(lastDay).padStart(2, "0")}`,
+  };
 }
 
 /** Adds whole days to a YYYY-MM-DD value using UTC arithmetic (no DST/timezone drift). */
@@ -76,6 +83,13 @@ export function datesBetween(from: string, to: string): string[] {
 export const MAX_RANGE_DAYS = 366;
 
 // Expects YYYY-MM-DD values; caps query spans so range-driven loops and DB scans stay bounded.
-export function exceedsMaxRange(from: string, to: string, maxDays = MAX_RANGE_DAYS): boolean {
-  return Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) > maxDays * 24 * 60 * 60 * 1000;
+export function exceedsMaxRange(
+  from: string,
+  to: string,
+  maxDays = MAX_RANGE_DAYS
+): boolean {
+  return (
+    Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`) >
+    maxDays * 24 * 60 * 60 * 1000
+  );
 }

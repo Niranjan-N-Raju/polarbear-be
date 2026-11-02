@@ -10,8 +10,10 @@ export interface EmployeeStatusFields {
   isActive?: boolean;
 }
 
-export function isEmployeeActiveOn(employee: EmployeeStatusFields, date: string): boolean {
-
+export function isEmployeeActiveOn(
+  employee: EmployeeStatusFields,
+  date: string
+): boolean {
   if (employee.dateOfJoining) {
     const joinDate = businessDateValue(new Date(employee.dateOfJoining));
     if (joinDate > date) return false;

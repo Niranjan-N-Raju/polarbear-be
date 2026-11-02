@@ -1,4 +1,4 @@
-import type { NextFunction, Request, Response } from 'express';
+import type { NextFunction, Request, Response } from "express";
 
 export interface RateLimitEntry {
   count: number;
@@ -41,7 +41,8 @@ export class MemoryRateLimitStore implements RateLimitStore {
   }
 
   set(key: string, entry: RateLimitEntry): void {
-    if (!this.map.has(key) && this.map.size >= this.maxEntries) this.prune(Date.now());
+    if (!this.map.has(key) && this.map.size >= this.maxEntries)
+      this.prune(Date.now());
     this.map.set(key, entry);
   }
 
@@ -61,9 +62,11 @@ export class MemoryRateLimitStore implements RateLimitStore {
   // per insert instead of a full scan on every insert.
   private prune(now: number): void {
     const target = Math.floor(this.maxEntries * 0.9);
-    const unlocked = (entry: RateLimitEntry) => !entry.lockedUntil || now >= entry.lockedUntil;
+    const unlocked = (entry: RateLimitEntry) =>
+      !entry.lockedUntil || now >= entry.lockedUntil;
     for (const [key, entry] of this.map) {
-      if (now - entry.firstAt > MAX_ENTRY_AGE_MS && unlocked(entry)) this.map.delete(key);
+      if (now - entry.firstAt > MAX_ENTRY_AGE_MS && unlocked(entry))
+        this.map.delete(key);
     }
     for (const [key, entry] of this.map) {
       if (this.map.size <= target) return;
@@ -99,13 +102,21 @@ export function resetRateLimitsForTests(): void {
   store.clear();
 }
 
-function freshEntry(current: RateLimitEntry | undefined, now: number, config: RateLimitConfig): boolean {
-  return !current || now - current.firstAt > config.windowMs || (current.lockedUntil !== undefined && now >= current.lockedUntil);
+function freshEntry(
+  current: RateLimitEntry | undefined,
+  now: number,
+  config: RateLimitConfig
+): boolean {
+  return (
+    !current ||
+    now - current.firstAt > config.windowMs ||
+    (current.lockedUntil !== undefined && now >= current.lockedUntil)
+  );
 }
 
 export function checkRateLimit(
   key: string,
-  config: RateLimitConfig,
+  config: RateLimitConfig
 ): { allowed: boolean; retryAfterMs?: number } {
   const now = Date.now();
   const current = store.get(key);
@@ -130,7 +141,10 @@ export function checkRateLimit(
 }
 
 /** Reports an active lockout without consuming budget (used for failure-only counters). */
-export function peekRateLimit(key: string): { allowed: boolean; retryAfterMs?: number } {
+export function peekRateLimit(key: string): {
+  allowed: boolean;
+  retryAfterMs?: number;
+} {
   const now = Date.now();
   const current = store.get(key);
   if (current?.lockedUntil && now < current.lockedUntil) {
@@ -140,21 +154,34 @@ export function peekRateLimit(key: string): { allowed: boolean; retryAfterMs?: n
 }
 
 /** Records one failure; the key locks once `maxAttempts` failures occur inside the window. */
-export function recordRateLimitFailure(key: string, config: RateLimitConfig): void {
+export function recordRateLimitFailure(
+  key: string,
+  config: RateLimitConfig
+): void {
   const now = Date.now();
   const current = store.get(key);
   if (current?.lockedUntil && now < current.lockedUntil) return;
-  const base = freshEntry(current, now, config) ? { count: 0, firstAt: now } : current!;
+  const base = freshEntry(current, now, config)
+    ? { count: 0, firstAt: now }
+    : current!;
   const count = base.count + 1;
   store.set(key, {
     count,
     firstAt: base.firstAt,
-    lockedUntil: count >= config.maxAttempts ? now + config.lockoutMs : undefined,
+    lockedUntil:
+      count >= config.maxAttempts ? now + config.lockoutMs : undefined,
   });
 }
 
-export function sendRateLimited(response: Response, retryAfterMs = 60_000, message = 'Too many requests. Please try again later.'): void {
-  response.setHeader('Retry-After', String(Math.max(1, Math.ceil(retryAfterMs / 1000))));
+export function sendRateLimited(
+  response: Response,
+  retryAfterMs = 60_000,
+  message = "Too many requests. Please try again later."
+): void {
+  response.setHeader(
+    "Retry-After",
+    String(Math.max(1, Math.ceil(retryAfterMs / 1000)))
+  );
   response.status(429).json({ message });
 }
 
@@ -165,7 +192,7 @@ export function sendRateLimited(response: Response, retryAfterMs = 60_000, messa
 export function rateLimitMiddleware(
   scope: string,
   config: RateLimitConfig,
-  keyFn: (request: Request) => string | null | undefined,
+  keyFn: (request: Request) => string | null | undefined
 ) {
   return (request: Request, response: Response, next: NextFunction): void => {
     const key = keyFn(request);
@@ -183,35 +210,84 @@ export function rateLimitMiddleware(
 }
 
 export const byUser = (request: Request) => request.auth?.id;
-export const byIp = (request: Request) => request.ip || request.socket.remoteAddress || 'unknown';
+export const byIp = (request: Request) =>
+  request.ip || request.socket.remoteAddress || "unknown";
 
 function positiveIntEnv(name: string, fallback: number): number {
-  const parsed = Number.parseInt(process.env[name] ?? '', 10);
+  const parsed = Number.parseInt(process.env[name] ?? "", 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
 export const rateLimits = {
-  userCreate: { windowMs: 60 * 60_000, maxAttempts: 20, lockoutMs: 30 * 60_000 },
-  storeCreate: { windowMs: 60 * 60_000, maxAttempts: 10, lockoutMs: 30 * 60_000 },
-  passwordChange: { windowMs: 15 * 60_000, maxAttempts: 5, lockoutMs: 30 * 60_000 },
-  sessionExtend: { windowMs: 5 * 60_000, maxAttempts: 10, lockoutMs: 5 * 60_000 },
+  userCreate: {
+    windowMs: 60 * 60_000,
+    maxAttempts: 20,
+    lockoutMs: 30 * 60_000,
+  },
+  storeCreate: {
+    windowMs: 60 * 60_000,
+    maxAttempts: 10,
+    lockoutMs: 30 * 60_000,
+  },
+  passwordChange: {
+    windowMs: 15 * 60_000,
+    maxAttempts: 5,
+    lockoutMs: 30 * 60_000,
+  },
+  sessionExtend: {
+    windowMs: 5 * 60_000,
+    maxAttempts: 10,
+    lockoutMs: 5 * 60_000,
+  },
   // Failure counters: lock after N failed logins inside the window.
   // Per (account, IP): tight, so one source cannot brute-force an account...
-  loginAccountFailures: { windowMs: 15 * 60_000, maxAttempts: 5, lockoutMs: 15 * 60_000 },
+  loginAccountFailures: {
+    windowMs: 15 * 60_000,
+    maxAttempts: 5,
+    lockoutMs: 15 * 60_000,
+  },
   // ...per account across all IPs: much higher, so an attacker cannot lock a victim out
   // with a handful of bad guesses, but distributed guessing is still capped.
-  loginAccountGlobalFailures: { windowMs: 15 * 60_000, maxAttempts: 50, lockoutMs: 15 * 60_000 },
-  loginIpFailures: { windowMs: 15 * 60_000, maxAttempts: 30, lockoutMs: 15 * 60_000 },
+  loginAccountGlobalFailures: {
+    windowMs: 15 * 60_000,
+    maxAttempts: 50,
+    lockoutMs: 15 * 60_000,
+  },
+  loginIpFailures: {
+    windowMs: 15 * 60_000,
+    maxAttempts: 30,
+    lockoutMs: 15 * 60_000,
+  },
   // Total login attempts per IP (successful or not), generous enough for a shared store network.
-  loginIpAttempts: { windowMs: 15 * 60_000, maxAttempts: 100, lockoutMs: 15 * 60_000 },
+  loginIpAttempts: {
+    windowMs: 15 * 60_000,
+    maxAttempts: 100,
+    lockoutMs: 15 * 60_000,
+  },
   logout: { windowMs: 60_000, maxAttempts: 20, lockoutMs: 60_000 },
-  apiIp: { windowMs: 60_000, maxAttempts: positiveIntEnv('API_RATE_LIMIT_PER_MINUTE', 600), lockoutMs: 60_000 },
-  expensiveRead: { windowMs: 60_000, maxAttempts: positiveIntEnv('EXPENSIVE_RATE_LIMIT_PER_MINUTE', 60), lockoutMs: 60_000 },
+  apiIp: {
+    windowMs: 60_000,
+    maxAttempts: positiveIntEnv("API_RATE_LIMIT_PER_MINUTE", 600),
+    lockoutMs: 60_000,
+  },
+  expensiveRead: {
+    windowMs: 60_000,
+    maxAttempts: positiveIntEnv("EXPENSIVE_RATE_LIMIT_PER_MINUTE", 60),
+    lockoutMs: 60_000,
+  },
   upload: { windowMs: 10 * 60_000, maxAttempts: 30, lockoutMs: 10 * 60_000 },
   // Downloads of stored files (logo, employee documents) have their own budget so viewing never
   // consumes the upload allowance.
-  uploadRead: { windowMs: 10 * 60_000, maxAttempts: 300, lockoutMs: 10 * 60_000 },
+  uploadRead: {
+    windowMs: 10 * 60_000,
+    maxAttempts: 300,
+    lockoutMs: 10 * 60_000,
+  },
   // Name/language edits on PATCH /api/me; password changes keep the stricter passwordChange budget.
-  profileUpdate: { windowMs: 15 * 60_000, maxAttempts: 30, lockoutMs: 15 * 60_000 },
+  profileUpdate: {
+    windowMs: 15 * 60_000,
+    maxAttempts: 30,
+    lockoutMs: 15 * 60_000,
+  },
   write: { windowMs: 60_000, maxAttempts: 120, lockoutMs: 60_000 },
 } satisfies Record<string, RateLimitConfig>;

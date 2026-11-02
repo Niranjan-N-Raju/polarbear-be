@@ -1,15 +1,27 @@
-import { Router } from 'express';
-import { deleteProducts, getInventory, getProducts, patchInventory, patchProducts, postInventory, postProducts } from '../controllers/franchise-inventory.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
-import { byUser, rateLimitMiddleware, rateLimits } from '../utils/rateLimit.js';
-export { MAX_PRODUCTS_PER_REQUEST } from '../services/franchise-inventory.js';
+import { Router } from "express";
+import {
+  deleteProducts,
+  getInventory,
+  getProducts,
+  patchInventory,
+  patchProducts,
+  postInventory,
+  postProducts,
+} from "../controllers/franchise-inventory.js";
+import { requireAuth, requireRole } from "../middleware/auth.js";
+import { byUser, rateLimitMiddleware, rateLimits } from "../utils/rateLimit.js";
+export { MAX_PRODUCTS_PER_REQUEST } from "../services/franchise-inventory.js";
 export const franchiseInventoryRouter = Router();
 const router = franchiseInventoryRouter;
-const expensiveReadLimiter = rateLimitMiddleware('expensive-read', rateLimits.expensiveRead, byUser);
-router.get('/products', requireAuth, getProducts);
-router.post('/products', requireAuth, requireRole('admin'), postProducts);
-router.patch('/products', requireAuth, requireRole('admin'), patchProducts);
-router.delete('/products', requireAuth, requireRole('admin'), deleteProducts);
-router.get('/inventory', requireAuth, expensiveReadLimiter, getInventory);
-router.post('/inventory', requireAuth, postInventory);
-router.patch('/inventory', requireAuth, patchInventory);
+const expensiveReadLimiter = rateLimitMiddleware(
+  "expensive-read",
+  rateLimits.expensiveRead,
+  byUser
+);
+router.get("/products", requireAuth, getProducts);
+router.post("/products", requireAuth, requireRole("admin"), postProducts);
+router.patch("/products", requireAuth, requireRole("admin"), patchProducts);
+router.delete("/products", requireAuth, requireRole("admin"), deleteProducts);
+router.get("/inventory", requireAuth, expensiveReadLimiter, getInventory);
+router.post("/inventory", requireAuth, postInventory);
+router.patch("/inventory", requireAuth, patchInventory);

@@ -12,7 +12,8 @@ export interface LoginUser {
   franchises?: unknown[];
   mustChangePassword?: boolean;
 }
-export const LOGIN_RATE_MESSAGE = "Too many login attempts. Please try again later.";
+export const LOGIN_RATE_MESSAGE =
+  "Too many login attempts. Please try again later.";
 let dummyHashPromise: Promise<string> | undefined;
 export function dummyHash(): Promise<string> {
   dummyHashPromise ??= bcrypt.hash("polar-bear-dummy-password", 12);
