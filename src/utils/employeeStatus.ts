@@ -1,4 +1,4 @@
-import { businessDateValue } from "./dateUtils.js";
+import { dateValueFromDate } from "./dateUtils.js";
 
 /**
  * Determines whether an employee was actively employed on a given business date (Asia/Kolkata),
@@ -15,13 +15,13 @@ export function isEmployeeActiveOn(
   date: string
 ): boolean {
   if (employee.dateOfJoining) {
-    const joinDate = businessDateValue(new Date(employee.dateOfJoining));
+    const joinDate = dateValueFromDate(employee.dateOfJoining);
     if (joinDate > date) return false;
   }
 
   if (employee.isActive === false) {
     if (!employee.archivedAt) return false;
-    const archivedDate = businessDateValue(new Date(employee.archivedAt));
+    const archivedDate = dateValueFromDate(employee.archivedAt);
     // archivedAt marks the first inactive instant: the employee is active only on dates strictly
     // before archivedAt's business date. Archiving stores the start of the day after the last
     // working day, so that last day itself remains active and paid.
