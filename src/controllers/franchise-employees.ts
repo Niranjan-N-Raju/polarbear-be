@@ -43,6 +43,7 @@ import {
   addDaysToDateValue,
   businessDateValue,
   businessDayStart,
+  isPaidLeaveEligible,
   isValidDate,
 } from "../utils/dateUtils.js";
 import { isEmployeeActiveOn } from "../utils/employeeStatus.js";
@@ -109,6 +110,8 @@ export async function getUsers(
       salary:
         user.salary == null ? null : salaryAtDate(user, businessDateValue()),
       latestSalary: user.salary,
+      paidLeaveBalance: user.paidLeaveBalance ?? 0,
+      paidLeaveEligible: isPaidLeaveEligible(user.dateOfJoining),
       role: user.role,
       isActive: user.isActive !== false,
       actualDob: user.actualDob,
@@ -607,6 +610,79 @@ export async function postUsersIdDocumentsDocumentType(
     },
   });
   response.json({ document: { fileName, contentType, size: bytes.length } });
+}
+
+export async function postPaidLeave(
+  request: Request,
+  response: Response
+) {
+  if (!isFranchiseAdmin(request)) {
+    response.status(request.auth ? 403 : 401).json({ message: "Forbidden" });
+    return;
+  }
+  const storeId = await resolveStore(request, response);
+  if (!storeId) return;
+  const body = bodyRecord(request);
+  const action = body.action;
+  const amount = body.amount === undefined ? 1 : body.amount;
+  if (
+    (action !== "increment" && action !== "decrement") ||
+    typeof amount !== "number" ||
+    !Number.isSafeInteger(amount) ||
+    amount < 1 ||
+    amount > 30
+  ) {
+    response.status(400).json({ message: "Choose a valid paid leave adjustment." });
+    return;
+  }
+  const store = await Franchise.findById(storeId).select("paidLeaveEnabled").lean();
+  if (!store?.paidLeaveEnabled) {
+    response.status(403).json({ message: "Paid leave is not enabled for this store." });
+    return;
+  }
+  const target = await targetForStore(String(request.params.id), storeId);
+  if (!target) {
+    response.status(404).json({ message: "Employee not found." });
+    return;
+  }
+  if (target.isActive === false) {
+    response.status(400).json({ message: "Archived employees cannot change paid leave." });
+    return;
+  }
+  if (!isPaidLeaveEligible(target.dateOfJoining)) {
+    response.status(403).json({ message: "Paid leave is available after six months of service." });
+    return;
+  }
+  const delta = action === "increment" ? amount : -amount;
+  const updated = await User.findOneAndUpdate(
+    {
+      _id: target._id,
+      role: "employee",
+      franchises: storeId,
+      isActive: { $ne: false },
+      ...(action === "decrement" ? { paidLeaveBalance: { $gte: amount } } : {}),
+    },
+    { $inc: { paidLeaveBalance: delta } },
+    { new: true, runValidators: true }
+  );
+  if (!updated) {
+    response.status(409).json({ message: "There is not enough paid leave to decrement." });
+    return;
+  }
+  auditMutation(
+    request,
+    `employee.paid-leave.${action}ed`,
+    {
+      storeId,
+      targetId: target._id,
+      before: { paidLeaveBalance: target.paidLeaveBalance ?? 0 },
+      after: { paidLeaveBalance: updated.paidLeaveBalance ?? 0 },
+    }
+  );
+  response.json({
+    message: `Paid leave ${action === "increment" ? "increased" : "decreased"}.`,
+    paidLeaveBalance: updated.paidLeaveBalance ?? 0,
+  });
 }
 
 export async function getUsersIdDocumentsDocumentType(

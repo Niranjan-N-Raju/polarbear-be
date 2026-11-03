@@ -46,6 +46,7 @@ export interface UserRecord {
   aadharNumber?: string;
   panNumber?: string;
   salary?: number;
+  paidLeaveBalance?: number;
   salaryBaseline?: number;
   salaryRevisions?: {
     effectiveFrom: string;
@@ -94,6 +95,7 @@ const userSchema = new Schema<UserRecord>(
     aadharNumber: { type: String, trim: true },
     panNumber: { type: String, trim: true },
     salary: { type: Number, min: 0 },
+    paidLeaveBalance: { type: Number, min: 0, default: 0 },
     salaryBaseline: { type: Number, min: 0 },
     salaryRevisions: {
       type: [

@@ -5,6 +5,7 @@ import {
   getUsers,
   getUsersId,
   getUsersIdDocumentsDocumentType,
+  postPaidLeave,
   patchUsersId,
   postUsers,
   postUsersIdDocumentsDocumentType,
@@ -30,6 +31,7 @@ router.get("/users/:id", requireAuth, getUsersId);
 router.post("/users", requireAuth, postUsers);
 router.patch("/users/:id", requireAuth, patchUsersId);
 router.post("/users/:id/salary-hikes", requireAuth, postSalaryHike);
+router.post("/users/:id/paid-leave", requireAuth, postPaidLeave);
 router.put("/users/:id", requireAuth, putUsersId);
 router.delete("/users/:id", requireAuth, deleteUsersId);
 router.post(

@@ -64,6 +64,36 @@ export function dateValueFromDate(value: string | Date): string {
   return businessDateValue(date);
 }
 
+/** Date when the employee completes six calendar months of service (clamped to month end). */
+export function paidLeaveEligibilityDate(
+  joiningDate?: string | Date | null
+): string | null {
+  if (!joiningDate) return null;
+  const joined =
+    joiningDate instanceof Date ? joiningDate : new Date(joiningDate);
+  if (Number.isNaN(joined.getTime())) return null;
+  const value = dateValueFromDate(joiningDate);
+  const [year, month, day] = value.split("-").map(Number);
+  const targetMonth = year * 12 + month - 1 + 6;
+  const targetYear = Math.floor(targetMonth / 12);
+  const targetMonthNumber = (targetMonth % 12) + 1;
+  const targetDay = Math.min(
+    day,
+    new Date(Date.UTC(targetYear, targetMonthNumber, 0)).getUTCDate()
+  );
+  return `${targetYear}-${String(targetMonthNumber).padStart(2, "0")}-${String(
+    targetDay
+  ).padStart(2, "0")}`;
+}
+
+export function isPaidLeaveEligible(
+  joiningDate?: string | Date | null,
+  today = businessDateValue()
+): boolean {
+  const eligibleFrom = paidLeaveEligibilityDate(joiningDate);
+  return eligibleFrom !== null && today >= eligibleFrom;
+}
+
 export function isValidDate(value: string): boolean {
   if (!DATE_PATTERN.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00`);

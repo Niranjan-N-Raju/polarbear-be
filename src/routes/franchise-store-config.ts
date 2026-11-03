@@ -7,12 +7,14 @@ import {
   getStoresBranding,
   getStoresCycle,
   getStoresLogo,
+  getStoresPaidLeave,
   getStoresPositions,
   getStoresShifts,
   postStoresLogo,
   putStoresBranding,
   putStoresCycle,
   putStoresPositions,
+  putStoresPaidLeave,
   putStoresShifts,
 } from "../controllers/franchise-store-config.js";
 export const franchiseStoreConfigRouter = Router();
@@ -32,5 +34,7 @@ router.get("/stores/cycle", requireAuth, getStoresCycle);
 router.put("/stores/cycle", requireAuth, putStoresCycle);
 router.get("/stores/positions", requireAuth, getStoresPositions);
 router.put("/stores/positions", requireAuth, putStoresPositions);
+router.get("/stores/paid-leave", requireAuth, getStoresPaidLeave);
+router.put("/stores/paid-leave", requireAuth, putStoresPaidLeave);
 router.get("/stores/shifts", requireAuth, getStoresShifts);
 router.put("/stores/shifts", requireAuth, putStoresShifts);

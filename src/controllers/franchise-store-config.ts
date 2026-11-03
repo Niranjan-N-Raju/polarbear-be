@@ -399,6 +399,58 @@ export async function putStoresPositions(
   });
 }
 
+export async function getStoresPaidLeave(
+  request: Request,
+  response: Response,
+  next: NextFunction
+) {
+  if (!isFranchiseAdmin(request)) {
+    next();
+    return;
+  }
+  const storeId = await getStoreId(request, response);
+  if (!storeId) return;
+  const store = await Franchise.findById(storeId).select("paidLeaveEnabled").lean();
+  if (!store) {
+    response.status(404).json({ message: "Store not found." });
+    return;
+  }
+  response.json({ enabled: store.paidLeaveEnabled === true });
+}
+
+export async function putStoresPaidLeave(
+  request: Request,
+  response: Response,
+  next: NextFunction
+) {
+  if (!isFranchiseAdmin(request)) {
+    next();
+    return;
+  }
+  const body = bodyRecord(request);
+  if (typeof body.enabled !== "boolean") {
+    response.status(400).json({ message: "Choose whether paid leave is enabled." });
+    return;
+  }
+  const storeId = await getStoreId(request, response);
+  if (!storeId) return;
+  const store = await Franchise.findById(storeId).select("paidLeaveEnabled");
+  if (!store) {
+    response.status(404).json({ message: "Store not found." });
+    return;
+  }
+  const previous = store.paidLeaveEnabled === true;
+  store.paidLeaveEnabled = body.enabled;
+  await store.save();
+  auditMutation(request, "store.paid-leave.updated", {
+    storeId,
+    targetId: storeId,
+    before: { enabled: previous },
+    after: { enabled: store.paidLeaveEnabled },
+  });
+  response.json({ message: "Paid leave setting saved.", enabled: store.paidLeaveEnabled });
+}
+
 export async function getStoresShifts(
   request: Request,
   response: Response,

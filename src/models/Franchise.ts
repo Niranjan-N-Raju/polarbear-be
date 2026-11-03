@@ -29,6 +29,7 @@ export interface FranchiseRecord {
   logo?: FranchiseLogo;
   shifts: StoreShift[];
   positions: string[];
+  paidLeaveEnabled?: boolean;
   salaryCycleType?: "calendar_month" | "custom";
   salaryCycleStartDay?: number;
   salaryCycleEndDay?: number;
@@ -91,6 +92,7 @@ const franchiseSchema = new Schema<FranchiseRecord>(
     },
     shifts: { type: [shiftSchema], default: [] },
     positions: { type: [String], default: () => [...DEFAULT_POSITION_OPTIONS] },
+    paidLeaveEnabled: { type: Boolean, default: false },
     salaryCycleType: { type: String, enum: ["calendar_month", "custom"] },
     salaryCycleStartDay: { type: Number, min: 1, max: 31 },
     salaryCycleEndDay: { type: Number, min: 1, max: 31 },
