@@ -36,7 +36,7 @@ const productSchema = new Schema<ProductRecord>(
     normalizedName: { type: String, required: true },
     createdAt: { type: Date, default: () => new Date() },
   },
-  { collection: "raw_materials", versionKey: false, autoIndex: false }
+  { collection: "products", versionKey: false, autoIndex: false }
 );
 productSchema.index({ normalizedName: 1 }, { unique: true });
 

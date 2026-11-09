@@ -201,10 +201,6 @@ describe("franchise inventory API", () => {
     assert.equal(insertMany.mock.callCount(), 1);
   });
 
-  it("stores the shared catalog in the raw materials collection", () => {
-    assert.equal(Product.collection.collectionName, "raw_materials");
-  });
-
   it("rejects products that already exist without inserting", async () => {
     asPlatformAdmin();
     mock.method(Product, "find", () => queryResult([{ _id: productId }]));

@@ -22,6 +22,7 @@ import {
 } from "../utils/franchiseRoute.js";
 import { auditMutation } from "../utils/businessLimits.js";
 import { isDateValue } from "../utils/storeAccess.js";
+
 export async function getProducts(
   request: Request,
   response: Response,
@@ -221,7 +222,9 @@ export async function postInventory(
       quantity: item?.quantity,
     },
   });
-  response.status(201).json({ item: item ? serializeItem(item) : null });
+  response.status(201).json({
+    item: item ? serializeItem(item) : null,
+  });
 }
 
 function wroteDocument(
