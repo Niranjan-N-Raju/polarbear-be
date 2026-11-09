@@ -19,6 +19,7 @@ import {
   Product,
 } from "../src/models/Inventory.js";
 import { User } from "../src/models/User.js";
+import { ProductCategory } from "../src/models/ProductCategory.js";
 import { signSessionToken } from "../src/utils/token.js";
 
 const userId = new mongoose.Types.ObjectId();
@@ -215,6 +216,37 @@ describe("franchise inventory API", () => {
     });
     assert.equal(response.status, 409);
     assert.equal(insertMany.mock.callCount(), 0);
+  });
+
+  it("creates categories with normalized unique names", async () => {
+    asPlatformAdmin();
+    const categoryId = new mongoose.Types.ObjectId();
+    let created: Record<string, unknown> = {};
+    mock.method(ProductCategory, "create", async (value: Record<string, unknown>) => {
+      created = value;
+      return { _id: categoryId, ...value };
+    });
+    const response = await call("POST", "/product-categories", {
+      name: "  Frozen Treats  ",
+    });
+    assert.equal(response.status, 201);
+    assert.equal(created.name, "Frozen Treats");
+    assert.equal(created.normalizedName, "frozen treats");
+  });
+
+  it("rejects duplicate category names", async () => {
+    asPlatformAdmin();
+    mock.method(ProductCategory, "create", async () => {
+      throw Object.assign(new Error("duplicate"), { code: 11000 });
+    });
+    const response = await call("POST", "/product-categories", {
+      name: "frozen treats",
+    });
+    assert.equal(response.status, 409);
+    assert.equal(
+      ((await response.json()) as { message: string }).message,
+      "That category name already exists."
+    );
   });
 
   it("does not expose product deletion", async () => {

@@ -16,6 +16,7 @@ import {
   Product,
 } from "../src/models/Inventory.js";
 import { PnlInput } from "../src/models/PnlInput.js";
+import { ProductCategory } from "../src/models/ProductCategory.js";
 import { Sale } from "../src/models/Sale.js";
 import { User } from "../src/models/User.js";
 import { WeeklyRoster } from "../src/models/WeeklyRoster.js";
@@ -39,6 +40,7 @@ const MODELS: mongoose.Model<any>[] = [
   PnlInput,
   Withdrawal,
   Product,
+  ProductCategory,
   InventoryItem,
   DumpedInventory,
 ];

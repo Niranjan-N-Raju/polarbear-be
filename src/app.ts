@@ -4,6 +4,7 @@ import { authRouter } from "./routes/auth.js";
 import { adminDashboardRouter } from "./routes/admin-dashboard.js";
 import { adminStoresRouter } from "./routes/admin-stores.js";
 import { adminUsersRouter } from "./routes/admin-users.js";
+import { productCategoriesRouter } from "./routes/product-categories.js";
 import { franchiseDashboardRouter } from "./routes/franchise-dashboard.js";
 import { franchiseInventoryRouter } from "./routes/franchise-inventory.js";
 import { franchiseWithdrawalsRouter } from "./routes/franchise-withdrawals.js";
@@ -68,6 +69,7 @@ app.use("/api", franchiseSalaryRouter);
 app.use("/api", adminDashboardRouter);
 app.use("/api", adminStoresRouter);
 app.use("/api", adminUsersRouter);
+app.use("/api", productCategoriesRouter);
 app.use("/api/me", profileRouter);
 app.use("/api", healthRouter);
 
