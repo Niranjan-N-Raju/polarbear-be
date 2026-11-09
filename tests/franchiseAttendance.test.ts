@@ -98,6 +98,47 @@ describe("franchise attendance API", () => {
     assert.equal(bulkWrite.mock.callCount(), 1);
   });
 
+  it("hides attendance on and after an employee's archived date", async () => {
+    mock.method(Franchise, "findById", () =>
+      queryResult({ _id: storeId, isActive: true })
+    );
+    mock.method(WeeklyRoster, "find", () => queryResult([]));
+    mock.method(User, "find", () =>
+      queryResult([
+        {
+          _id: employeeId,
+          isActive: false,
+          dateOfJoining: new Date("2025-01-01"),
+          archivedAt: new Date("2026-01-04T00:00:00.000Z"),
+        },
+      ])
+    );
+    mock.method(Attendance, "find", () =>
+      queryResult([
+        { employee: employeeId, date: "2026-01-03", status: "Present" },
+        { employee: employeeId, date: "2026-01-04", status: "Present" },
+      ])
+    );
+
+    const response = await call(
+      "GET",
+      `/attendance?storeId=${storeId}&from=2026-01-03&to=2026-01-04`
+    );
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(
+      ((await response.json()) as { records: Array<{ date: string }> }).records,
+      [
+        {
+          employeeId: String(employeeId),
+          date: "2026-01-03",
+          status: "Present",
+          comment: "",
+        },
+      ]
+    );
+  });
+
   it("materializes roster defaults only for elapsed dates, active employees, and non-removed marks", async () => {
     const today = businessDateValue();
     const yesterday = addDaysToDateValue(today, -1);

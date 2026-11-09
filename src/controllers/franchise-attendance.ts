@@ -150,13 +150,28 @@ export async function getAttendance(
     franchise: storeId,
     ...(hasDate ? { date } : { date: { $gte: from, $lte: to } }),
   }).lean();
+  const employees = records.length
+    ? await User.find({
+        _id: { $in: [...new Set(records.map((record) => String(record.employee)))] },
+      })
+        .select("_id dateOfJoining archivedAt isActive")
+        .lean()
+    : [];
+  const employeesById = new Map(
+    employees.map((employee) => [String(employee._id), employee])
+  );
   response.json({
-    records: records.map((record) => ({
+    records: records
+      .filter((record) => {
+        const employee = employeesById.get(String(record.employee));
+        return !employee || isEmployeeActiveOn(employee, record.date);
+      })
+      .map((record) => ({
       employeeId: String(record.employee),
       date: record.date,
       status: record.status as AttendanceRecord["status"],
       comment: record.comment ?? "",
-    })),
+      })),
   });
 }
 
