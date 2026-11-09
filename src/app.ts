@@ -51,7 +51,7 @@ app.use(UPLOAD_PATHS, express.json({ limit: "4.5mb" }));
 app.use(express.json({ limit: "1mb" }));
 app.use(rejectDangerousKeys);
 app.get("/api/greet", (_request, response) => {
-  response.json({ message: "Hello! Welcome to Vajan PB." });
+  response.json({ message: "Hello! Welcome to Vajan." });
 });
 app.use("/api", vercelDatabase);
 app.use("/api/auth", authRouter);

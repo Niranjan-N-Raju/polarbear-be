@@ -30,7 +30,7 @@ it("returns a public greeting without credentials or a database connection", asy
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /application\/json/);
   assert.deepEqual(await response.json(), {
-    message: "Hello! Welcome to Vajan PB.",
+    message: "Hello! Welcome to Vajan.",
   });
 });
 

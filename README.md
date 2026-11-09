@@ -140,7 +140,7 @@ creates the unique employee-code index. Deploy both apps together and resume
 employee creation after migration. Production index creation is explicit.
 
 `GET /api/greet` is public and returns `200` with
-`{"message":"Hello! Welcome to Vajan PB."}`. No bearer token or login is required.
+`{"message":"Hello! Welcome to Vajan."}`. No bearer token or login is required.
 It does not query MongoDB, and the existing API rate limit still applies.
 For local testing with the backend running:
 
