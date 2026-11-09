@@ -1,6 +1,5 @@
 import { Router } from "express";
 import {
-  deleteProducts,
   getInventory,
   getProducts,
   patchInventory,
@@ -21,7 +20,6 @@ const expensiveReadLimiter = rateLimitMiddleware(
 router.get("/products", requireAuth, getProducts);
 router.post("/products", requireAuth, requireRole("admin"), postProducts);
 router.patch("/products", requireAuth, requireRole("admin"), patchProducts);
-router.delete("/products", requireAuth, requireRole("admin"), deleteProducts);
 router.get("/inventory", requireAuth, expensiveReadLimiter, getInventory);
 router.post("/inventory", requireAuth, postInventory);
 router.patch("/inventory", requireAuth, patchInventory);

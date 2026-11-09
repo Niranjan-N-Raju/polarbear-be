@@ -217,18 +217,13 @@ describe("franchise inventory API", () => {
     assert.equal(insertMany.mock.callCount(), 0);
   });
 
-  it("blocks deleting products with stock history", async () => {
+  it("does not expose product deletion", async () => {
     asPlatformAdmin();
-    mock.method(Product, "findById", () => queryResult({ _id: productId }));
-    mock.method(InventoryItem, "countDocuments", async () => 0);
-    mock.method(DumpedInventory, "countDocuments", async () => 1);
-    const deleteOne = mock.method(Product, "deleteOne", async () => ({}));
     const response = await call("DELETE", "/products", {
       storeId: String(storeId),
       productId: String(productId),
     });
-    assert.equal(response.status, 409);
-    assert.equal(deleteOne.mock.callCount(), 0);
+    assert.equal(response.status, 404);
   });
 
   it("allows only a platform administrator to rename a shared product", async () => {

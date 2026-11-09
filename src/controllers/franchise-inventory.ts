@@ -52,23 +52,29 @@ export async function postProducts(request: Request, response: Response) {
       : [];
   const normalizedNames = names.map(normalizeProductName);
   if (names.length === 0) {
-    response.status(400).json({ message: "Enter at least one product name." });
+    response
+      .status(400)
+      .json({ message: "Enter at least one raw material name." });
     return;
   }
   if (names.length > MAX_PRODUCTS_PER_REQUEST) {
     response.status(400).json({
-      message: `Add at most ${MAX_PRODUCTS_PER_REQUEST} products at a time.`,
+      message: `Add at most ${MAX_PRODUCTS_PER_REQUEST} raw materials at a time.`,
     });
     return;
   }
   if (names.some((value) => value.length > 100)) {
     response
       .status(400)
-      .json({ message: "Each product name must be 100 characters or fewer." });
+      .json({
+        message: "Each raw material name must be 100 characters or fewer.",
+      });
     return;
   }
   if (new Set(normalizedNames).size !== normalizedNames.length) {
-    response.status(409).json({ message: "Product names must be unique." });
+    response
+      .status(409)
+      .json({ message: "Raw material names must be unique." });
     return;
   }
   // Pre-check avoids partially inserting a batch when one name already exists.
@@ -80,7 +86,7 @@ export async function postProducts(request: Request, response: Response) {
   if (existing.length > 0) {
     response
       .status(409)
-      .json({ message: "A product with this name already exists." });
+      .json({ message: "A raw material with this name already exists." });
     return;
   }
   const products = names.map((value, index) => ({
@@ -95,7 +101,7 @@ export async function postProducts(request: Request, response: Response) {
     if (isDuplicateKeyError(error)) {
       response
         .status(409)
-        .json({ message: "A product with this name already exists." });
+        .json({ message: "A raw material with this name already exists." });
       return;
     }
     throw error;
@@ -110,7 +116,7 @@ export async function patchProducts(request: Request, response: Response) {
   if (!mongoose.isValidObjectId(productId) || !name || name.length > 100) {
     response
       .status(400)
-      .json({ message: "A valid product and name are required." });
+      .json({ message: "A valid raw material and name are required." });
     return;
   }
   const objectId = new mongoose.Types.ObjectId(productId);
@@ -128,7 +134,7 @@ export async function patchProducts(request: Request, response: Response) {
     if (isDuplicateKeyError(error)) {
       response
         .status(409)
-        .json({ message: "A product with this name already exists." });
+        .json({ message: "A raw material with this name already exists." });
       return;
     }
     throw error;
@@ -138,34 +144,6 @@ export async function patchProducts(request: Request, response: Response) {
     { $set: { product: name } }
   );
   response.json({ message: "Product updated." });
-}
-
-export async function deleteProducts(request: Request, response: Response) {
-  const body = bodyRecord(request);
-  const productId = typeof body.productId === "string" ? body.productId : "";
-  if (!mongoose.isValidObjectId(productId)) {
-    response.status(400).json({ message: "A valid product is required." });
-    return;
-  }
-  const objectId = new mongoose.Types.ObjectId(productId);
-  const product = await Product.findById(objectId).select("_id").lean();
-  if (!product) {
-    response.status(404).json({ message: "Product not found." });
-    return;
-  }
-  const [inventoryReferences, dumpedReferences] = await Promise.all([
-    InventoryItem.countDocuments({ productId: objectId }),
-    DumpedInventory.countDocuments({ productId: objectId }),
-  ]);
-  if (inventoryReferences || dumpedReferences) {
-    response.status(409).json({
-      message:
-        "This product has stock or disposal history and cannot be deleted.",
-    });
-    return;
-  }
-  await Product.deleteOne({ _id: objectId });
-  response.json({ message: "Product deleted." });
 }
 
 export async function getInventory(

@@ -77,7 +77,7 @@ const scopedRoutes: Endpoint[] = [
 const adminRoutes: Endpoint[] = [
   ...endpoints("/stores", ["POST", "PATCH"]),
   ...endpoints("/stores/archive", ["PATCH"]),
-  ...endpoints("/products", ["POST", "PATCH", "DELETE"]),
+  ...endpoints("/products", ["POST", "PATCH"]),
 ];
 const protectedRoutes = [
   ...scopedRoutes,
