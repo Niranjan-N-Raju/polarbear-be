@@ -39,6 +39,10 @@ export async function postProductCategory(
     return;
   }
   const normalizedName = normalizeProductName(name);
+  if (await ProductCategory.exists({ normalizedName })) {
+    response.status(409).json({ message: "That category name already exists." });
+    return;
+  }
   try {
     const category = await ProductCategory.create({ name, normalizedName });
     response.status(201).json({ category: serializeCategory(category) });
@@ -67,6 +71,16 @@ export async function patchProductCategory(
     return;
   }
   const id = new mongoose.Types.ObjectId(categoryId);
+  const duplicate = await ProductCategory.findOne({
+    _id: { $ne: id },
+    normalizedName: normalizeProductName(name),
+  })
+    .select("_id")
+    .lean();
+  if (duplicate) {
+    response.status(409).json({ message: "That category name already exists." });
+    return;
+  }
   try {
     const result = await ProductCategory.updateOne(
       { _id: id },
