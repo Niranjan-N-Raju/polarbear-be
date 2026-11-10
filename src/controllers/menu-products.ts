@@ -27,6 +27,11 @@ export async function getMenuProducts(_request: Request, response: Response) {
 export async function saveMenuProduct(request: Request, response: Response) {
   const body = bodyRecord(request);
   const name = typeof body.name === "string" ? body.name.trim() : "";
+  const price = body.price;
+  if (typeof price !== "number" || !Number.isFinite(price) || price < 0.01 || price > 1_000_000 || Math.abs(price * 100 - Math.round(price * 100)) > 0.000001) {
+    response.status(400).json({ message: "Enter a price between 0.01 and 1,000,000 rupees, with at most two decimal places." });
+    return;
+  }
   const categoryId = typeof body.categoryId === "string" ? body.categoryId : "";
   const dineIn = parseComposition(body.dineIn);
   const takeAway = parseComposition(body.takeAway);
@@ -53,7 +58,7 @@ export async function saveMenuProduct(request: Request, response: Response) {
     response.status(409).json({ message: "That product name already exists." });
     return;
   }
-  const values = { name, normalizedName, categoryId: new mongoose.Types.ObjectId(categoryId), dineIn, takeAway };
+  const values = { name, normalizedName, price: Math.round(price * 100) / 100, categoryId: new mongoose.Types.ObjectId(categoryId), dineIn, takeAway };
   try {
     const product = id
       ? await MenuProduct.findOneAndUpdate({ _id: id }, { $set: values }, { new: true, runValidators: true })

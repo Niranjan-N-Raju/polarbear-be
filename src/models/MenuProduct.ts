@@ -8,6 +8,7 @@ export interface CompositionItem {
 export interface MenuProductRecord {
   name: string;
   normalizedName: string;
+  price: number;
   categoryId: mongoose.Types.ObjectId;
   dineIn: CompositionItem[];
   takeAway: CompositionItem[];
@@ -28,6 +29,7 @@ const composition = {
 const schema = new Schema<MenuProductRecord>({
   name: { type: String, required: true, trim: true, maxlength: 100 },
   normalizedName: { type: String, required: true },
+  price: { type: Number, required: true, min: 0.01, max: 1_000_000, validate: (value: number) => Number.isFinite(value) && Math.abs(value * 100 - Math.round(value * 100)) < 0.000001 },
   categoryId: { type: Schema.Types.ObjectId, ref: "ProductCategory", required: true },
   dineIn: composition,
   takeAway: composition,

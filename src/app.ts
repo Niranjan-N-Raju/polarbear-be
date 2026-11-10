@@ -7,6 +7,7 @@ import { adminUsersRouter } from "./routes/admin-users.js";
 import { productCategoriesRouter } from "./routes/product-categories.js";
 import { menuProductsRouter } from "./routes/menu-products.js";
 import { franchiseDashboardRouter } from "./routes/franchise-dashboard.js";
+import { franchiseBillingRouter } from "./routes/franchise-billing.js";
 import { franchiseInventoryRouter } from "./routes/franchise-inventory.js";
 import { franchiseWithdrawalsRouter } from "./routes/franchise-withdrawals.js";
 import { franchisePnlRouter } from "./routes/franchise-pnl.js";
@@ -60,6 +61,7 @@ app.use("/api/auth", authRouter);
 // Franchise handlers run first on shared paths (such as /users and /stores).
 // They call next() for other roles so the administrator routers can handle those requests.
 app.use("/api", franchiseDashboardRouter);
+app.use("/api", franchiseBillingRouter);
 app.use("/api", franchiseInventoryRouter);
 app.use("/api", franchiseWithdrawalsRouter);
 app.use("/api", franchisePnlRouter);

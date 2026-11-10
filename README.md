@@ -127,7 +127,8 @@ The seed requires an existing active admin account and associates the demo recor
 
 Admin-only `GET`, `POST`, and `PATCH /api/menu-products` manage the shared
 `menu_products` collection, separate from raw materials in `products`.
-Writes require `name` (1 to 100 characters, unique after trim/lowercase), an
+Writes require `price` (tax-exclusive INR, 0.01 to 1,000,000 with at most two
+decimal places), `name` (1 to 100 characters, unique after trim/lowercase), an
 existing `categoryId`, and both `dineIn` and `takeAway` arrays. Each array must
 contain 1 to 100 distinct raw materials as `{ productId, quantity }`, with a
 finite positive quantity in the raw material's existing unit (`g`, `ml`, `each`).
@@ -139,6 +140,30 @@ Before enabling writes in an Express-only deployment, review
 `normalizedName` index is required to prevent concurrent duplicate names.
 Next.js uses the same document shape and ensures these indexes through its
 existing inventory initialization. Saving compositions does not deduct stock.
+
+### Store Billing
+
+Franchise-admin bearer sessions can call `GET` and `POST /api/bills`, and
+`GET` and `POST /api/billing-tables`. The selected store comes from the verified
+session, is checked against current store assignments, and must be active.
+`GET /api/bills` returns the menu and serving tokens. `?newRequest=true` issues
+a cryptographically random UUID for an idempotent save; clients retain it across
+retries and send it as `requestId`. `?billId=<id>` reads an authorized receipt.
+`?view=history` supports `from`, `to`, `orderType`, `tableNumber`, `search` (bill
+number), and `page`; omitted dates mean today in IST and pages contain 25 bills.
+
+Writes require a token for both dine-in and takeaway, 1..100 unique products,
+whole quantities from 1..999, and `expectedSubtotalPaise`. Prices are loaded
+from the catalog, totals are integer paise, and GST is 5% rounded once on the
+subtotal. Bills above INR 1,000,000 are rejected. Optional customer details use
+AES-256-GCM with the existing `FIELD_ENCRYPTION_KEY`; never replace that key
+when accessing existing encrypted records.
+
+The API uses the same `bills` and `billing_tables` documents/indexes as Next.js;
+billing indexes are initialized on first use. Both clients preserve historical
+prices and legacy bills with no token. No live database changes or migrations
+are executed by this documentation. Saving a bill does not record payment,
+deduct inventory, or automatically change daily sales/P&L records.
 
 ### Employee IDs
 
