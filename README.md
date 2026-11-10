@@ -123,6 +123,23 @@ The seed requires an existing active admin account and associates the demo recor
 
 ## API
 
+### Menu Products
+
+Admin-only `GET`, `POST`, and `PATCH /api/menu-products` manage the shared
+`menu_products` collection, separate from raw materials in `products`.
+Writes require `name` (1 to 100 characters, unique after trim/lowercase), an
+existing `categoryId`, and both `dineIn` and `takeAway` arrays. Each array must
+contain 1 to 100 distinct raw materials as `{ productId, quantity }`, with a
+finite positive quantity in the raw material's existing unit (`g`, `ml`, `each`).
+`PATCH` also requires the menu product's `productId`.
+
+Before enabling writes in an Express-only deployment, review
+`npm run db:sync-indexes`, then explicitly apply the missing indexes with
+`npm run db:sync-indexes -- --apply` in the intended environment. The unique
+`normalizedName` index is required to prevent concurrent duplicate names.
+Next.js uses the same document shape and ensures these indexes through its
+existing inventory initialization. Saving compositions does not deduct stock.
+
 ### Employee IDs
 
 Employees receive permanent public IDs such as `EMP0001` from a database-wide

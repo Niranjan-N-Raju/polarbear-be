@@ -19,12 +19,16 @@ export function serializeProduct(product: {
   _id: unknown;
   name: string;
   normalizedName: string;
+  unit?: "g" | "ml" | "each";
+  materialType?: "food" | "packing" | "none";
   createdAt?: Date;
 }) {
   return {
     _id: String(product._id),
     name: product.name,
     normalizedName: product.normalizedName,
+    unit: product.unit ?? "each",
+    materialType: product.materialType ?? "food",
     createdAt: product.createdAt,
   };
 }

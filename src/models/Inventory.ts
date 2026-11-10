@@ -6,6 +6,8 @@ export interface ProductRecord {
   _id: mongoose.Types.ObjectId;
   name: string;
   normalizedName: string;
+  unit: "g" | "ml" | "each";
+  materialType: "food" | "packing" | "none";
   createdAt: Date;
 }
 
@@ -34,6 +36,8 @@ const productSchema = new Schema<ProductRecord>(
   {
     name: { type: String, required: true, trim: true, maxlength: 100 },
     normalizedName: { type: String, required: true },
+    unit: { type: String, enum: ["g", "ml", "each"], default: "each" },
+    materialType: { type: String, enum: ["food", "packing", "none"], default: "food" },
     createdAt: { type: Date, default: () => new Date() },
   },
   { collection: "products", versionKey: false, autoIndex: false }

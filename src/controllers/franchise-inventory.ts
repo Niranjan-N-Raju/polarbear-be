@@ -23,6 +23,19 @@ import {
 import { auditMutation } from "../utils/businessLimits.js";
 import { isDateValue } from "../utils/storeAccess.js";
 
+const RAW_MATERIAL_UNITS = new Set(["g", "ml", "each"]);
+const RAW_MATERIAL_TYPES = new Set(["food", "packing", "none"]);
+function parseRawMaterialUnit(value: unknown): "g" | "ml" | "each" | null {
+  return typeof value === "string" && RAW_MATERIAL_UNITS.has(value)
+    ? (value as "g" | "ml" | "each")
+    : null;
+}
+function parseRawMaterialType(value: unknown): "food" | "packing" | "none" | null {
+  return typeof value === "string" && RAW_MATERIAL_TYPES.has(value)
+    ? (value as "food" | "packing" | "none")
+    : null;
+}
+
 export async function getProducts(
   request: Request,
   response: Response,
@@ -43,7 +56,11 @@ export async function getProducts(
 }
 
 export async function postProducts(request: Request, response: Response) {
-  const { name } = bodyRecord(request);
+  const { name, unit: unitValue, materialType: materialTypeValue } = bodyRecord(request);
+  const unit = unitValue === undefined ? "each" : parseRawMaterialUnit(unitValue);
+  const materialType = materialTypeValue === undefined
+    ? "food"
+    : parseRawMaterialType(materialTypeValue);
   const names =
     typeof name === "string"
       ? name
@@ -52,6 +69,14 @@ export async function postProducts(request: Request, response: Response) {
           .filter(Boolean)
       : [];
   const normalizedNames = names.map(normalizeProductName);
+  if (unit === null) {
+    response.status(400).json({ message: "Choose grams (g), milliliters (ml), or each." });
+    return;
+  }
+  if (materialType === null) {
+    response.status(400).json({ message: "Choose food material or packing material." });
+    return;
+  }
   if (names.length === 0) {
     response
       .status(400)
@@ -94,6 +119,8 @@ export async function postProducts(request: Request, response: Response) {
     _id: new mongoose.Types.ObjectId(),
     name: value,
     normalizedName: normalizedNames[index]!,
+    unit,
+    materialType,
     createdAt: new Date(),
   }));
   try {
@@ -114,7 +141,17 @@ export async function patchProducts(request: Request, response: Response) {
   const body = bodyRecord(request);
   const name = typeof body.name === "string" ? body.name.trim() : "";
   const productId = typeof body.productId === "string" ? body.productId : "";
-  if (!mongoose.isValidObjectId(productId) || !name || name.length > 100) {
+  const unit = body.unit === undefined ? undefined : parseRawMaterialUnit(body.unit);
+  const materialType = body.materialType === undefined
+    ? undefined
+    : parseRawMaterialType(body.materialType);
+  if (
+    !mongoose.isValidObjectId(productId) ||
+    !name ||
+    name.length > 100 ||
+    (body.unit !== undefined && unit === null) ||
+    (body.materialType !== undefined && materialType === null)
+  ) {
     response
       .status(400)
       .json({ message: "A valid raw material and name are required." });
@@ -129,7 +166,14 @@ export async function patchProducts(request: Request, response: Response) {
   try {
     await Product.updateOne(
       { _id: objectId },
-      { $set: { name, normalizedName: normalizeProductName(name) } }
+      {
+        $set: {
+          name,
+          normalizedName: normalizeProductName(name),
+          ...(unit ? { unit } : {}),
+          ...(materialType ? { materialType } : {}),
+        },
+      }
     );
   } catch (error) {
     if (isDuplicateKeyError(error)) {
